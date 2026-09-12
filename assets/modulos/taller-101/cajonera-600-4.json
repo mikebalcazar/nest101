@@ -1,0 +1,52 @@
+{
+  "nombre": "Cajonera 600 · 4 cajones",
+  "nota": "Cuatro cajones repartidos. Sin entrepaño.",
+  "gabinete": {
+    "nombre": "Cajonera 600",
+    "tipo": "base",
+    "ancho": 600.0,
+    "alto": 880.0,
+    "prof": 600.0,
+    "frentes": [
+      {
+        "tipo": "cajon",
+        "alto": null,
+        "n": 1
+      },
+      {
+        "tipo": "cajon",
+        "alto": null,
+        "n": 1
+      },
+      {
+        "tipo": "cajon",
+        "alto": null,
+        "n": 1
+      },
+      {
+        "tipo": "cajon",
+        "alto": null,
+        "n": 1
+      }
+    ],
+    "n_entrepanos": 0,
+    "entrepanos_fijos": false,
+    "alturas_entrepanos": null,
+    "con_cubierta": null,
+    "gola": null,
+    "alto_gola": null,
+    "unero": null,
+    "alto_manguete": null,
+    "tapa_completa": null,
+    "respaldo_completo": null,
+    "vuelo_cubierta": null,
+    "con_zoclo": true,
+    "cantidad": 1,
+    "alto_cuerpo": null,
+    "altura_zoclo": null,
+    "alto_derivado": "cuerpo",
+    "mat_cuerpo": null,
+    "mat_frente": null,
+    "mat_respaldo": null
+  }
+}

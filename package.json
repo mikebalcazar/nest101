@@ -1,0 +1,93 @@
+{
+  "name": "nest101",
+  "version": "10.0.2",
+  "description": "nest101 — despiece de gabinetes para corte CNC · Taller 101",
+  "main": "electron/main.js",
+  "author": "Taller 101",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "backend": "python3 server.py --port 8760",
+    "verificar": "python3 verificar.py",
+    "dist:win": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.taller101.nest101",
+    "productName": "nest101",
+    "copyright": "© 2026 Taller 101",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "runtime/python",
+        "to": "python"
+      },
+      {
+        "from": ".",
+        "to": "app_py",
+        "filter": [
+          "core/**/*",
+          "export/**/*",
+          "identificador/**/*",
+          "ui/**/*",
+          "assets/**/*",
+          "server.py",
+          "cli.py",
+          "verificar.py",
+          "LEEME.md"
+        ]
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": "Diagnostico.bat",
+        "to": "Diagnostico.bat"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "${productName}-X.0.2-setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "nest101",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico",
+      "deleteAppDataOnUninstall": false
+    },
+    "fileAssociations": [
+      {
+        "ext": "t101x",
+        "name": "Proyecto nest101",
+        "description": "Mueble de nest101",
+        "icon": "build/icon.ico",
+        "role": "Editor"
+      }
+    ],
+    "publish": null
+  }
+}
