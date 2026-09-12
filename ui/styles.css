@@ -1,0 +1,443 @@
+/* Identidad Taller 101 — azul #0080C1, Sansation para marca, Raleway para texto.
+   El naranja (--canto) NO es color de marca: marca el cubrecanto y tiene que
+   distinguirse del azul de un vistazo. */
+/* Oscuro: el tema con el que nació la app. Sigue siendo el de arranque. */
+:root{
+  --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --panel3:#15181f;
+  --fondo2:#1a1e27; --fondo3:#0d0f14; --lienzo:#0b0d11;
+  --linea:#2a2f3a; --linea2:#23272f; --linea3:#3d4453;
+  --campo:#12151b; --sw:#2b303b; --hover:#272c37; --sel:#22262f; --hoverfila:#1b1f27;
+  --aviso-bg:#1d2530;
+  --txt:#e6e8ec; --txt2:#9aa1ad; --txt3:#6b7280;
+  --acc:#0080C1; --acc2:#3AA3DC; --acc-sombra:#122733;
+  --canto:#c8813a; --ok:#4ea36b; --warn:#c9694a;
+  --peligro:#e08c7a; --peligro-bg:#3a2020;
+  --sombra:rgba(0,0,0,.55);
+  --r:6px; --f:13px;
+  --marca:"Sansation","Segoe UI",system-ui,sans-serif;
+}
+
+/* #027 — Claro. Pensado para un taller con luz de día, no para una oficina a
+   oscuras. El azul de marca es el mismo: sobre blanco tiene contraste 4.7:1. */
+html[data-tema="claro"]{
+  --bg:#eef0f3; --panel:#ffffff; --panel2:#f4f6f8; --panel3:#eceff2;
+  --fondo2:#f7f8fa; --fondo3:#e6e9ee; --lienzo:#dfe3e9;
+  --linea:#d3d8e0; --linea2:#e6e9ee; --linea3:#b9c1cc;
+  --campo:#ffffff; --sw:#e4e8ee; --hover:#e9edf2; --sel:#e2ecf5; --hoverfila:#f2f5f8;
+  --aviso-bg:#e4eef7;
+  --txt:#1a1f27; --txt2:#5a6472; --txt3:#8a93a1;
+  --acc:#0071aa; --acc2:#0080C1; --acc-sombra:#dbeaf5;
+  --canto:#b4712a; --ok:#2f7d4f; --warn:#b4472a;
+  --peligro:#a8422a; --peligro-bg:#fbe6e0;
+  --sombra:rgba(20,30,45,.18);
+}
+
+@font-face{font-family:"Sansation";src:url("vendor/fonts/sansation-400.woff2") format("woff2");
+  font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Sansation";src:url("vendor/fonts/sansation-700.woff2") format("woff2");
+  font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Raleway";src:url("vendor/fonts/raleway-400.woff2") format("woff2");
+  font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:"Raleway";src:url("vendor/fonts/raleway-600.woff2") format("woff2");
+  font-weight:600;font-style:normal;font-display:swap}
+@font-face{font-family:"Raleway";src:url("vendor/fonts/raleway-700.woff2") format("woff2");
+  font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:"Raleway";src:url("vendor/fonts/raleway-400-italic.woff2") format("woff2");
+  font-weight:400;font-style:italic;font-display:swap}
+
+/* #095 — Las CIFRAS van en Fira Sans, no en Raleway.
+   Norma de la suite (`claude/tipografia-cifras-suite101.md`): toda medida,
+   cantidad, precio, fecha u hora se compone en Fira Sans, cifras alineadas.
+
+   Raleway trae cifras «old style». Medido sobre el propio archivo: el 3, 4, 5,
+   7 y 9 caen hasta 154 unidades por debajo de la línea base y el 6 y el 8 suben
+   140 por encima. En un rótulo se ve elegante; en una cota de corte no se lee
+   de un golpe, y un número que no se lee de un golpe es una pieza mal cortada.
+   Se veía en pantalla: «0%» parecía «o%» y «90 cm», «go cm».
+
+   El truco es `unicode-range`. La familia «Cifras» sólo trae los dígitos y
+   cuatro signos, y va PRIMERO en la pila: los números caen en Fira y todo lo
+   demás sigue en Raleway, sin tocar una etiqueta del HTML. 5.7 kB por peso, y
+   viajan dentro: nunca se piden por internet. */
+@font-face{font-family:"Cifras";src:url("vendor/fonts/fira-cifras-400.woff2") format("woff2");
+  font-weight:400;font-style:normal;font-display:swap;
+  unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+@font-face{font-family:"Cifras";src:url("vendor/fonts/fira-cifras-600.woff2") format("woff2");
+  font-weight:600 700;font-style:normal;font-display:swap;
+  unicode-range:U+0030-0039,U+00B0,U+00B1,U+00D7,U+0025}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  background:var(--bg); color:var(--txt);
+  font:var(--f)/1.45 "Cifras","Raleway","Segoe UI",system-ui,sans-serif;
+  display:flex; flex-direction:column; overflow:hidden; user-select:none;
+}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--panel2);border:1px solid var(--linea);border-radius:var(--r);
+  padding:6px 12px;cursor:pointer;transition:.12s}
+button:hover{background:var(--hover);border-color:var(--linea3)}
+button.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+button.pri:hover{background:var(--acc2);border-color:var(--acc2)}
+button.gh{background:transparent}
+button:disabled{opacity:.4;cursor:not-allowed}
+input,select{background:var(--campo);border:1px solid var(--linea);border-radius:var(--r);
+  padding:5px 8px;width:100%}
+input:focus,select:focus{outline:none;border-color:var(--acc)}
+input[type=number]{text-align:right}
+input[type=checkbox]{width:auto}
+label{display:block;font-size:11px;color:var(--txt2);margin-bottom:3px;
+  text-transform:uppercase;letter-spacing:.04em}
+
+/* ---------- barra superior ---------- */
+header{display:flex;align-items:center;gap:10px;padding:8px 12px;
+  background:var(--panel);border-bottom:1px solid var(--linea);flex:none}
+/* #079 — «nest101»: la primera mitad en delgada y la segunda en negrita, para
+   que se lea como una palabra y no como un código. Va en minúsculas siempre. */
+header .logo{font-family:var(--marca);font-weight:300;letter-spacing:.08em;font-size:13px;
+  color:var(--txt);margin-right:4px;text-transform:none}
+header .logo b{font-weight:700;color:var(--acc)}
+header .logoimg{display:block;width:auto;margin-right:4px}
+#inicio .logoimg{display:block;width:auto;margin-bottom:10px;opacity:.9}
+header .sep{width:1px;height:22px;background:var(--linea)}
+header input.tit{width:210px;font-weight:600}
+header input.cli{width:150px}
+header .der{margin-left:auto;display:flex;gap:8px;align-items:center}
+#estado{font-size:11px;color:var(--txt3)}
+
+/* ---------- #036 · pestañas de muebles ---------- */
+#pestanas{display:flex;align-items:stretch;gap:2px;padding:0 8px;
+  background:var(--panel);border-bottom:1px solid var(--linea);min-height:31px}
+#pestanas .tiras{display:flex;gap:2px;overflow-x:auto;flex:1;min-width:0}
+#pestanas .tiras::-webkit-scrollbar{height:0}
+.pest{display:flex;align-items:center;gap:7px;padding:0 9px 0 11px;font-size:12px;
+  color:var(--txt2);background:transparent;border:0;border-bottom:2px solid transparent;
+  white-space:nowrap;cursor:pointer;max-width:210px}
+.pest:hover{color:var(--txt);background:var(--hover)}
+.pest.act{color:var(--txt);border-bottom-color:var(--acc);background:var(--bg)}
+.pest .nom{overflow:hidden;text-overflow:ellipsis}
+.pest .pt{color:var(--acc);font-size:15px;line-height:1;opacity:0;margin-left:-3px}
+.pest.sucia .pt{opacity:1}
+.pest .x{opacity:0;font-size:14px;line-height:1;color:var(--txt3);padding:0 2px;border-radius:3px}
+.pest:hover .x,.pest.act .x{opacity:1}
+.pest .x:hover{background:var(--linea);color:var(--txt)}
+#pestanas .mas{background:transparent;border:0;color:var(--txt3);font-size:17px;
+  padding:0 10px;cursor:pointer}
+#pestanas .mas:hover{color:var(--txt)}
+/* con un solo mueble la barra estorba más de lo que ayuda */
+#pestanas.uno{display:none}
+
+/* ---------- cuerpo ---------- */
+main{flex:1;display:flex;min-height:0}
+.col{display:flex;flex-direction:column;min-height:0}
+#izq{width:220px;background:var(--panel);border-right:1px solid var(--linea)}
+#der{width:340px;background:var(--panel);border-left:1px solid var(--linea)}
+#centro{flex:1;min-width:0;position:relative;background:var(--lienzo)}
+.hd{padding:8px 12px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--txt2);border-bottom:1px solid var(--linea);display:flex;align-items:center;gap:6px}
+.hd .n{margin-left:auto;color:var(--txt3)}
+.scroll{overflow-y:auto;flex:1;min-height:0}
+.scroll::-webkit-scrollbar{width:9px}
+.scroll::-webkit-scrollbar-thumb{background:var(--sw);border-radius:5px}
+
+/* ---------- lista de gabinetes ---------- */
+.gab{padding:9px 12px;border-bottom:1px solid var(--linea);cursor:pointer;position:relative}
+.gab:hover{background:var(--panel2)}
+.gab.sel{background:var(--sel);box-shadow:inset 3px 0 0 var(--acc)}
+.gab .nm{font-weight:600;font-size:12.5px;display:flex;align-items:center;gap:6px}
+.gab .dm{font-size:11px;color:var(--txt2);margin-top:2px;font-variant-numeric:tabular-nums}
+.gab .badge{font-size:9.5px;background:var(--sw);color:var(--txt2);padding:1px 5px;
+  border-radius:9px;text-transform:uppercase;letter-spacing:.05em}
+.gab .x{position:absolute;right:8px;top:8px;opacity:0;font-size:15px;color:var(--txt3);
+  line-height:1;padding:2px 5px;border-radius:4px}
+.gab:hover .x{opacity:1}
+.gab .x:hover{background:var(--peligro-bg);color:var(--peligro)}
+.vacio{padding:22px 14px;color:var(--txt3);font-size:12px;text-align:center;line-height:1.6}
+
+/* ---------- 3D ---------- */
+#lienzo{width:100%;height:100%;display:block}
+.overlay{position:absolute;display:flex;gap:6px;align-items:center;
+  background:color-mix(in srgb, var(--panel) 92%, transparent);border:1px solid var(--linea);border-radius:var(--r);
+  padding:6px 9px;backdrop-filter:blur(6px)}
+#ctrl3d{top:10px;left:10px}
+#ctrl3d input[type=range]{width:110px}
+#info3d{bottom:10px;left:10px;font-size:11px;color:var(--txt2);flex-direction:column;
+  align-items:flex-start;gap:2px;line-height:1.5}
+#leyenda{top:10px;right:10px;flex-direction:column;align-items:flex-start;gap:3px;font-size:11px}
+#leyenda .it{display:flex;gap:6px;align-items:center}
+#leyenda .sw{width:14px;height:10px;border-radius:2px;border:1px solid rgba(0,0,0,.5);flex:none}
+.tag{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--sw);color:var(--txt2)}
+
+/* ---------- panel derecho ---------- */
+.tabs{display:flex;border-bottom:1px solid var(--linea);flex:none}
+.tabs button{flex:1;border:none;border-radius:0;background:transparent;color:var(--txt2);
+  padding:9px 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+.tabs button.on{color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc);background:var(--panel2)}
+.pane{padding:12px;display:none}
+.pane.on{display:block}
+.sec{margin-bottom:16px}
+.sec>h3{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--acc);
+  margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--linea)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.fila{margin-bottom:9px}
+.chk{display:flex;align-items:center;gap:7px;margin-bottom:7px;font-size:12px;color:var(--txt)}
+.chk label{margin:0;text-transform:none;letter-spacing:0;font-size:12px;color:var(--txt)}
+
+/* ---------- frentes ---------- */
+.frente{background:var(--panel2);border:1px solid var(--linea);border-radius:var(--r);
+  padding:8px;margin-bottom:7px;display:grid;grid-template-columns:76px 1fr 46px 24px;
+  gap:6px;align-items:end}
+.frente .lbl{font-size:10px;color:var(--txt3)}
+.frente .del{background:transparent;border:none;color:var(--txt3);padding:4px}
+.frente .del:hover{color:var(--peligro)}
+
+/* ---------- tabla ---------- */
+table{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}
+th{text-align:left;color:var(--txt2);font-weight:500;font-size:10px;text-transform:uppercase;
+  letter-spacing:.04em;padding:6px 7px;background:var(--panel2);position:sticky;top:0;
+  border-bottom:1px solid var(--linea)}
+td{padding:5px 7px;border-bottom:1px solid var(--linea2)}
+tr:hover td{background:var(--hoverfila)}
+td.n,th.n{text-align:right}
+.mat td{vertical-align:middle}
+.mat input{padding:3px 6px;font-size:11px}
+
+/* ---------- resultados ---------- */
+#abajo{height:230px;background:var(--panel);border-top:1px solid var(--linea);
+  display:flex;flex-direction:column;flex:none}
+#abajo.min{height:38px}
+#abajo .hd{cursor:pointer}
+.kpis{display:flex;gap:16px;margin-left:auto;font-size:11px;color:var(--txt2);
+  text-transform:none;letter-spacing:0}
+.kpis b{color:var(--txt);font-weight:600}
+.kpis .costo b{color:var(--acc2)}
+.rtabs{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--linea);flex:none}
+.rtabs button{padding:3px 10px;font-size:11px;background:transparent;border-color:transparent;
+  color:var(--txt2)}
+.rtabs button.on{background:var(--panel2);border-color:var(--linea);color:var(--txt)}
+.rpane{display:none;overflow:auto;flex:1;min-height:0}
+.rpane.on{display:block}
+#hojasCv{display:flex;gap:14px;padding:12px;flex-wrap:wrap}
+.hojaBox{border:1px solid var(--linea);border-radius:var(--r);padding:8px;background:var(--panel2)}
+.hojaBox .t{font-size:10.5px;color:var(--txt2);margin-bottom:5px;display:flex;gap:8px}
+.hojaBox .t b{color:var(--txt)}
+
+/* ---------- modal ---------- */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;
+  align-items:center;justify-content:center;z-index:50}
+.modal.on{display:flex}
+.modal .caja{background:var(--panel);border:1px solid var(--linea);border-radius:8px;
+  padding:18px;width:440px;max-height:80vh;overflow:auto}
+.modal h2{font-size:14px;margin-bottom:14px}
+.modal .pie{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+.aviso{background:var(--aviso-bg);border-left:3px solid var(--acc);padding:8px 10px;
+  font-size:11.5px;color:var(--txt2);border-radius:0 var(--r) var(--r) 0;margin-bottom:12px}
+
+/* ---------- alturas con candado (#001) ---------- */
+.alturas{margin-top:11px;background:var(--panel2);border:1px solid var(--linea);
+  border-radius:var(--r);padding:9px}
+.ah{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--txt2);
+  margin-bottom:8px;display:flex;align-items:baseline;gap:7px}
+.ah span{text-transform:none;letter-spacing:0;color:var(--txt3);font-size:10px}
+.alt{display:flex;align-items:flex-end;gap:7px;margin-bottom:7px}
+.alt:last-child{margin-bottom:0}
+.alt>div{flex:1}
+.alt .cand{padding:4px 6px;font-size:12px;line-height:1;background:transparent;
+  border:1px solid transparent;filter:grayscale(1) opacity(.45);flex:none}
+.alt .cand:hover{filter:none;border-color:var(--linea)}
+.alt.calc .cand{filter:none;border-color:var(--acc);background:var(--acc-sombra)}
+.alt.calc input{color:var(--acc2);background:var(--panel3);border-style:dashed;cursor:not-allowed}
+.alt .limpiar{padding:4px 7px;font-size:11px;background:transparent;border-color:transparent;
+  color:var(--txt3);flex:none;visibility:hidden}
+.alt .limpiar:hover{color:var(--txt)}
+.alt.override .limpiar{visibility:visible}
+.alt.na{opacity:.35;pointer-events:none}
+label .orig{text-transform:none;letter-spacing:0;color:var(--txt3);font-size:9.5px}
+.alerta{margin-top:9px;background:var(--peligro-bg);border-left:3px solid var(--warn);
+  padding:7px 9px;font-size:11.5px;color:var(--peligro);border-radius:0 var(--r) var(--r) 0}
+
+/* ---------- 3D: cotas y controles (#002 #004 #013) ---------- */
+button.act{border-color:var(--acc);color:var(--acc2);background:var(--acc-sombra)}
+#cotas3d{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#cotas3d .cota{position:absolute;transform:translate(-50%,-50%);
+  background:color-mix(in srgb, var(--panel) 90%, transparent);
+  border:1px solid var(--acc);color:var(--acc2);
+  font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+  pointer-events:auto}   /* #022: la cota se toca, el resto de la capa no */
+.mat .col{width:22px;height:18px;padding:0;border:1px solid var(--linea);
+  border-radius:3px;background:none;cursor:pointer}
+
+/* ---------- aviso de medidas imposibles (#014) ---------- */
+#problema{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);
+  display:none;align-items:flex-start;gap:11px;max-width:min(640px,calc(100% - 40px));
+  background:var(--peligro-bg);border:1px solid var(--warn);border-left-width:3px;
+  border-radius:var(--r);padding:12px 16px;color:var(--peligro);font-size:13px;
+  line-height:1.5;box-shadow:0 8px 28px rgba(0,0,0,.45);z-index:20}
+#problema .ic{flex:none;width:19px;height:19px;border-radius:50%;
+  background:var(--warn);color:var(--peligro-bg);font-weight:700;font-size:13px;
+  display:flex;align-items:center;justify-content:center;margin-top:1px}
+
+#bTema{font-size:14px;line-height:1}
+
+/* ---------- pantalla de inicio (#018) ---------- */
+#inicio{position:fixed;inset:0;z-index:40;display:none;align-items:center;justify-content:center;
+  background:radial-gradient(1100px 620px at 50% 8%,var(--fondo2) 0%,var(--fondo3) 70%)}
+#inicio.on{display:flex}
+#inicio .panel{position:relative;width:min(880px,calc(100% - 48px));
+  background:var(--panel);border:1px solid var(--linea);border-radius:12px;
+  padding:30px 32px 20px;box-shadow:0 26px 70px var(--sombra)}
+#inicio .cerrar{position:absolute;top:12px;right:12px;background:transparent;border:none;
+  color:var(--txt3);font-size:20px;line-height:1;padding:2px 8px;display:none}
+#inicio .cerrar:hover{color:var(--txt);background:var(--panel2)}
+#inicio.hayProyecto .cerrar{display:block}
+#inicio .marca{margin-bottom:24px}
+#inicio .marca .nm{font-family:var(--marca);font-weight:300;letter-spacing:.12em;
+  font-size:27px;color:var(--txt);text-transform:none}
+#inicio .marca .nm b{font-weight:700;color:var(--acc)}
+#inicio .marca .sub{font-size:12px;color:var(--txt2);margin-top:6px}
+#inicio .cols{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+#inicio .acciones{display:grid;gap:10px}
+#inicio .tarj{display:flex;align-items:center;gap:13px;text-align:left;padding:15px 16px;
+  background:var(--panel2);border:1px solid var(--linea);border-radius:9px;width:100%}
+#inicio .tarj:hover{background:var(--hover);border-color:var(--linea3)}
+#inicio .tarj .ic{flex:none;width:36px;height:36px;border-radius:8px;background:var(--sw);
+  color:var(--txt2);display:flex;align-items:center;justify-content:center;
+  font-size:19px;line-height:1}
+#inicio .tarj.nueva{border-color:var(--acc)}
+#inicio .tarj.nueva .ic{background:var(--acc);color:#fff}
+#inicio .tarj .txt{display:block}
+#inicio .tarj b{display:block;font-size:13.5px}
+#inicio .tarj small{display:block;font-size:11px;color:var(--txt3);margin-top:2px}
+#inicio .recientes .hd{padding:0 0 7px;border-bottom:1px solid var(--linea);margin-bottom:4px}
+#inicio .recientes .limpiar{margin-left:auto;background:transparent;border:none;padding:0;
+  font-size:10px;color:var(--txt3);text-transform:none;letter-spacing:0}
+#inicio .recientes .limpiar:hover{color:var(--acc2);background:transparent}
+#inicio .lista{max-height:232px;overflow-y:auto}
+#inicio .lista::-webkit-scrollbar{width:8px}
+#inicio .lista::-webkit-scrollbar-thumb{background:var(--sw);border-radius:5px}
+#inicio .rec{display:block;width:100%;text-align:left;background:transparent;border:none;
+  border-bottom:1px solid var(--linea2);border-radius:0;padding:9px 8px}
+#inicio .rec:hover{background:var(--panel2)}
+#inicio .rec .n1{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+#inicio .rec .n2{font-size:10.5px;color:var(--txt3);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:left}
+#inicio .rec .cuando{margin-left:auto;font-size:10px;color:var(--txt3);font-weight:400}
+#inicio .rec.perdido{opacity:.45}
+#inicio .rec.perdido .n1::after{content:"no encontrado";font-size:9.5px;color:var(--warn);
+  font-weight:400;letter-spacing:.03em}
+#inicio .pie{display:flex;gap:12px;align-items:center;margin-top:22px;padding-top:12px;
+  border-top:1px solid var(--linea);font-size:10.5px;color:var(--txt3)}
+#inicio .pie #iAyuda{margin-left:auto}
+
+/* ---------- #025 · catálogo para agregar ---------- */
+.tienda{position:fixed;inset:0;z-index:45;display:none;align-items:center;justify-content:center;
+  background:color-mix(in srgb, var(--bg) 78%, transparent);backdrop-filter:blur(3px)}
+.tienda.on{display:flex}
+.tienda .caja{width:min(980px,calc(100% - 60px));max-height:82vh;display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--linea);border-radius:12px;
+  box-shadow:0 26px 70px var(--sombra);overflow:hidden}
+.tienda .cab{display:flex;align-items:center;gap:12px;padding:14px 16px;
+  border-bottom:1px solid var(--linea)}
+.tienda .cab b{font-size:14px}
+.tienda .cab input{flex:1;max-width:320px;margin-left:auto}
+.tienda .cab .ic{flex:none;font-size:17px;line-height:1;padding:2px 9px}
+.tienda .scroll{overflow-y:auto;padding:14px 16px 18px}
+.tienda .scroll::-webkit-scrollbar{width:9px}
+.tienda .scroll::-webkit-scrollbar-thumb{background:var(--sw);border-radius:5px}
+.tienda .secc{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--txt2);
+  margin:14px 0 9px;display:flex;gap:8px;align-items:baseline}
+.tienda .secc:first-child{margin-top:0}
+.tienda .secc span{color:var(--txt3);text-transform:none;letter-spacing:0;font-size:10.5px}
+.rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:11px}
+.rejilla .vacio{grid-column:1/-1;text-align:left;padding:10px 2px}
+.tarjeta{position:relative;background:var(--panel2);border:1px solid var(--linea);
+  border-radius:9px;padding:9px;text-align:left;display:flex;flex-direction:column;gap:7px}
+.tarjeta:hover{background:var(--hover);border-color:var(--acc)}
+.tarjeta .im{height:104px;display:flex;align-items:center;justify-content:center;
+  background:var(--campo);border-radius:6px;overflow:hidden}
+.tarjeta .im img{max-width:92%;max-height:96px;display:block}
+.tarjeta .im .cargando{font-size:10px;color:var(--txt3)}
+.tarjeta .nm{font-size:12.5px;font-weight:600;line-height:1.25}
+.tarjeta .dm{font-size:10.5px;color:var(--txt2);font-variant-numeric:tabular-nums}
+.tarjeta .badge{position:absolute;top:13px;right:13px;font-size:9px;background:var(--sw);
+  color:var(--txt2);padding:1px 6px;border-radius:9px;text-transform:uppercase;letter-spacing:.05em}
+.tarjeta .quitar{position:absolute;top:11px;left:11px;opacity:0;background:var(--panel);
+  border:1px solid var(--linea);color:var(--txt3);font-size:13px;line-height:1;padding:1px 6px;
+  border-radius:5px}
+.tarjeta:hover .quitar{opacity:1}
+.tarjeta .quitar:hover{background:var(--peligro-bg);color:var(--peligro)}
+
+/* ---------- cotas editables (#022 #023) ---------- */
+.cota.editable{cursor:text}
+.cota.editable:hover{background:var(--acc);color:#fff;box-shadow:0 0 0 2px var(--acc-sombra)}
+.cota.editando{padding:1px 3px;background:var(--panel);border:1px solid var(--acc);
+  display:flex;align-items:center;gap:3px}
+.cota.editando input{width:62px;padding:1px 4px;font-size:11px;text-align:right;
+  border:none;background:transparent}
+.cota.editando input:focus{outline:none}
+.cota .u{font-size:9.5px;color:var(--txt3)}
+
+/* ---------- guardado y deshacer (#015) ---------- */
+#puntoSucio{color:var(--acc);font-size:17px;line-height:0;margin-left:5px;
+  visibility:hidden;vertical-align:middle}
+button.ic{padding:5px 10px;font-size:15px;line-height:1.1}
+
+/* #083 — menú de clic derecho sobre el logotipo. Uno solo y muy chico: es la
+   única cosa de la app que se pide con el botón derecho, y no vale la pena un
+   sistema de menús para dos renglones. */
+.menuctx{position:fixed;z-index:99;background:var(--panel);border:1px solid var(--linea);
+  border-radius:8px;padding:4px;min-width:190px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.menuctx button{display:block;width:100%;text-align:left;background:none;border:0;
+  color:var(--txt);font:inherit;padding:7px 10px;border-radius:5px;cursor:pointer}
+.menuctx button:hover{background:var(--acc);color:#fff}
+
+/* #086 — barra de categorías de la librería. Una fila de pestañas planas: la
+   librería puede crecer a diez categorías y una lista vertical las escondería. */
+.tienda .cats{display:flex;gap:6px;padding:8px 14px;overflow-x:auto;
+  border-bottom:1px solid var(--linea);flex:none}
+.tienda .cat{display:flex;align-items:center;gap:6px;white-space:nowrap;
+  background:none;border:1px solid var(--linea);border-radius:99px;
+  color:var(--txt2);font:inherit;font-size:12px;padding:5px 12px;cursor:pointer}
+.tienda .cat:hover{border-color:var(--acc);color:var(--txt)}
+.tienda .cat.act{background:var(--acc);border-color:var(--acc);color:#fff}
+.tienda .cat .n{font-size:10px;opacity:.7}
+.tienda .cat .mia{color:var(--acc);font-size:14px;line-height:1}
+.tienda .cat.act .mia{color:#fff}
+.tienda .notacat{padding:10px 14px 0;font-size:11px;color:var(--txt3)}
+/* la nota de cada módulo: para qué sirve, debajo de la medida */
+.tienda .tarjeta .nt{display:block;font-size:10px;color:var(--txt3);
+  line-height:1.35;margin-top:2px;max-height:27px;overflow:hidden}
+
+/* #091 — Ayuda ▾. Un solo menú desplegable en toda la app: no vale la pena un
+   sistema de menús para tres renglones. */
+.menu{position:relative}
+.menu>button{white-space:nowrap}
+.lic td.n{width:1%}
+.menu .punto{color:var(--acc);font-size:16px;line-height:0;margin-left:3px}
+.menu .desplegable{position:absolute;top:100%;left:0;margin-top:4px;z-index:60;
+  background:var(--panel);border:1px solid var(--linea);border-radius:8px;
+  padding:4px;min-width:210px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.menu .desplegable button{display:flex;justify-content:space-between;gap:10px;
+  width:100%;text-align:left;background:none;border:0;color:var(--txt);
+  font:inherit;padding:7px 10px;border-radius:5px;cursor:pointer;white-space:nowrap}
+.menu .desplegable button:hover{background:var(--acc);color:#fff}
+.menu .desplegable .n{font-size:10px;opacity:.7}
+/* lista de avisos y de licencias */
+.avisos{display:grid;gap:8px;max-height:60vh;overflow:auto}
+.aviso{border:1px solid var(--linea);border-radius:8px;padding:9px 11px}
+.aviso.nuevo{border-color:var(--acc)}
+.aviso .t{font-weight:600;font-size:13px;display:flex;gap:7px;align-items:center}
+.aviso .t .imp{font-size:10px;background:var(--acc);color:#fff;border-radius:3px;
+  padding:1px 5px;font-weight:600}
+.aviso .f{font-size:10px;color:var(--txt3);margin-bottom:3px}
+.aviso .x{font-size:12px;color:var(--txt2);line-height:1.5;margin-top:4px}
+.lic{max-height:60vh;overflow:auto;font-size:12px}
+.lic table{width:100%;border-collapse:collapse}
+.lic td{padding:5px 6px;border-bottom:1px solid var(--linea);vertical-align:top}
+.lic td.n{font-weight:600;white-space:nowrap}
+.lic td.v{color:var(--txt3);white-space:nowrap}
+.lic td.l{color:var(--txt2)}
+.lic details summary{cursor:pointer;color:var(--acc);font-size:11px}
+.lic pre{white-space:pre-wrap;font-size:10px;color:var(--txt3);margin:5px 0 0;
+  max-height:180px;overflow:auto}

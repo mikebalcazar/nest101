@@ -1,0 +1,37 @@
+{
+  "nombre": "Aéreo 900 · 2 puertas",
+  "nota": "Tapa completa y sin zoclo, como todos los colgados.",
+  "gabinete": {
+    "nombre": "Aéreo 900",
+    "tipo": "aereo",
+    "ancho": 900.0,
+    "alto": 700.0,
+    "prof": 350.0,
+    "frentes": [
+      {
+        "tipo": "puerta",
+        "alto": null,
+        "n": 2
+      }
+    ],
+    "n_entrepanos": 1,
+    "entrepanos_fijos": false,
+    "alturas_entrepanos": null,
+    "con_cubierta": null,
+    "gola": null,
+    "alto_gola": null,
+    "unero": null,
+    "alto_manguete": null,
+    "tapa_completa": true,
+    "respaldo_completo": null,
+    "vuelo_cubierta": null,
+    "con_zoclo": false,
+    "cantidad": 1,
+    "alto_cuerpo": null,
+    "altura_zoclo": null,
+    "alto_derivado": "cuerpo",
+    "mat_cuerpo": null,
+    "mat_frente": null,
+    "mat_respaldo": null
+  }
+}

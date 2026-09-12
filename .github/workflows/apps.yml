@@ -1,0 +1,252 @@
+name: apps
+
+# Compila el instalador de Windows y lo publica en `descargas`.
+#
+# El chat no alcanza producción: su proxy de salida rechaza `api.github.com` y
+# `uploads.github.com`, que son las únicas puertas para crear una release y
+# subirle un archivo. El corredor sí tiene internet abierto. Por eso el chat
+# **prepara** la versión y **dispara** este workflow, y el corredor compila,
+# mide y publica. Es lo que manda `OPERAR.md` §6 y §7.
+#
+# Lo que este workflow deja, cuando termina en verde:
+#   · release `nest101-<versión>` en descargas, con el .exe y su sha256
+#   · release fija `nest101-ultima`, con el mismo archivo sin número en el nombre
+#     (es el enlace que se manda por WhatsApp y el que no caduca nunca)
+#   · `nest101.json` al día — que es lo que leen los programas ya instalados
+#   · `README.md` de descargas, con la versión y la fecha nuevas
+#
+# El último paso es el que importa: **se baja lo que se acaba de publicar y se
+# comprueba la huella**. Una release con un archivo a medias es peor que no
+# publicar: los talleres se la bajan sola y el instalador falla raro.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a publicar (ej. 0.16.0). Semver, sin la v."
+        required: true
+      notas:
+        description: "Qué cambió. Un renglón por cambio, separados por |"
+        required: false
+        default: ""
+      publicar:
+        description: "Publicar en descargas (apágalo para solo compilar y medir)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # La versión se escribe en dos lugares y los dos tienen que coincidir:
+      # `package.json` es la que va en el .exe, `server.py` es la que contesta
+      # /api/salud y contra la que se compara la publicada. Desfasarlas deja un
+      # programa que se cree otra versión de la que es y no se actualiza nunca.
+      - name: Escribir la versión en los dos lugares
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "versión no es semver: $v" }
+          $p = Get-Content package.json -Raw | ConvertFrom-Json
+          $p.version = $v
+          $p.build.win.artifactName = '${productName}-' + $v + '-setup.${ext}'
+          $p | ConvertTo-Json -Depth 20 | Set-Content package.json -Encoding utf8
+          (Get-Content server.py -Raw -Encoding utf8) `
+            -replace '(?m)^VERSION = ".*?".*$', ("VERSION = `"$v`"") |
+            Set-Content server.py -Encoding utf8
+          Select-String -Path server.py -Pattern '^VERSION'
+          node -p "'package.json -> ' + require('./package.json').version"
+
+      # El runtime de Windows no se versiona: son 371 MB que se regeneran igual
+      # cada vez. La receta es la de LEEME.md, y la caché la vuelve instantánea
+      # mientras no cambien ni el Python ni las librerías.
+      - name: Caché del runtime de Python
+        id: cache-runtime
+        uses: actions/cache@v4
+        with:
+          path: runtime/python
+          key: runtime-py-3.11.9-20240814-v1
+
+      - name: Armar el runtime de Python embebido
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L -o py.tar.gz https://github.com/astral-sh/python-build-standalone/releases/download/20240814/cpython-3.11.9+20240814-x86_64-pc-windows-msvc-shared-install_only.tar.gz
+          tar xzf py.tar.gz                       # deja ./python
+          cd python && find . -name "*.pdb" -delete
+          rm -rf tcl Lib/tkinter Lib/test Lib/idlelib Lib/lib2to3 Lib/ensurepip include libs Scripts
+          cd ..
+          python -m pip download --dest whl --platform win_amd64 --only-binary=:all: \
+            --python-version 3.11 --implementation cp \
+            fastapi uvicorn ezdxf openpyxl reportlab==4.4.10 pillow numpy
+          for w in whl/*.whl; do unzip -qo "$w" -d python/Lib/site-packages; done
+          rm -rf python/Lib/site-packages/{pip,pip-*,setuptools,setuptools-*,pkg_resources,_distutils_hack}
+          mkdir -p runtime && rm -rf runtime/python && mv python runtime/python
+          rm -rf whl py.tar.gz
+          du -sh runtime/python
+
+      # Las comprobaciones corren con el MISMO Python que va a viajar dentro del
+      # instalador. Correrlas con el Python del corredor mediría otra cosa.
+      - name: Las 93 comprobaciones
+        shell: pwsh
+        run: |
+          .\runtime\python\python.exe verificar.py
+          if ($LASTEXITCODE -ne 0) { throw "verificar.py falló" }
+
+      - name: Instalar dependencias de compilación
+        run: npm install --no-audit --no-fund
+
+      - name: Compilar el instalador
+        run: npx electron-builder --win nsis --x64
+
+      - name: Medir lo que salió
+        id: medir
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          $f = "dist/nest101-$v-setup.exe"
+          if (-not (Test-Path $f)) { throw "no se generó $f" }
+          $b = (Get-Item $f).Length
+          $h = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+          "archivo=$f"    | Out-File -Append $env:GITHUB_OUTPUT
+          "bytes=$b"      | Out-File -Append $env:GITHUB_OUTPUT
+          "sha256=$h"     | Out-File -Append $env:GITHUB_OUTPUT
+          "megas=$([math]::Round($b/1MB))" | Out-File -Append $env:GITHUB_OUTPUT
+          Write-Host "instalador: $f  ·  $b bytes  ·  sha256 $h"
+
+      # Una copia sin número en el nombre, para la release fija. Es el mismo
+      # archivo: se comprueba comparando la huella antes de subirlo.
+      - name: Copia de nombre fijo
+        shell: pwsh
+        run: |
+          Copy-Item "${{ steps.medir.outputs.archivo }}" "dist/nest101-setup.exe"
+          $h = (Get-FileHash "dist/nest101-setup.exe" -Algorithm SHA256).Hash.ToLower()
+          if ($h -ne "${{ steps.medir.outputs.sha256 }}") { throw "la copia no cuadra" }
+
+      - name: Guardar el instalador como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: nest101-${{ inputs.version }}-setup
+          path: dist/nest101-${{ inputs.version }}-setup.exe
+          retention-days: 14
+
+      # ------------------------------------------------------------ publicar
+      #
+      # TOKEN_DESCARGAS es un PAT con escritura en `mikebalcazar/descargas`. El
+      # GITHUB_TOKEN de este repositorio no sirve: no alcanza a otro repo.
+      - name: Publicar en descargas
+        if: inputs.publicar
+        env:
+          GH_TOKEN: ${{ secrets.TOKEN_DESCARGAS }}
+          V: ${{ inputs.version }}
+          BYTES: ${{ steps.medir.outputs.bytes }}
+          SHA: ${{ steps.medir.outputs.sha256 }}
+          MEGAS: ${{ steps.medir.outputs.megas }}
+          NOTAS: ${{ inputs.notas }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "falta el secreto TOKEN_DESCARGAS en este repositorio" >&2; exit 1
+          fi
+          REPO=mikebalcazar/descargas
+          FECHA=$(date -u +%Y-%m-%d)
+
+          # Notas: llegan separadas por | y se publican una por renglón.
+          python - <<'PY' > notas.txt
+          import os
+          n = os.environ.get("NOTAS", "").strip()
+          print("\n".join(x.strip() for x in n.split("|") if x.strip()) or
+                "Compilada y verificada por el chat.")
+          PY
+
+          # 1. la release con número
+          gh release create "nest101-$V" --repo "$REPO" \
+            --title "nest101 $V" --notes-file notas.txt || \
+            echo "la release ya existía; se le suben los archivos"
+          gh release upload "nest101-$V" --repo "$REPO" --clobber \
+            "dist/nest101-$V-setup.exe"
+
+          # 2. la release fija: el enlace que nunca cambia
+          gh release create "nest101-ultima" --repo "$REPO" \
+            --title "nest101 (última)" \
+            --notes "Siempre el último instalador. Hoy: $V." || true
+          gh release edit "nest101-ultima" --repo "$REPO" \
+            --notes "Siempre el último instalador. Hoy: $V."
+          gh release upload "nest101-ultima" --repo "$REPO" --clobber \
+            "dist/nest101-setup.exe"
+
+          # 3. el contrato que leen los programas instalados
+          git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/$REPO" d
+          cd d
+          git config user.name "claude"
+          git config user.email "mike@forespot.com"
+          python - <<PY
+          import json, os
+          p = "nest101.json"
+          d = json.load(open(p, encoding="utf-8"))
+          b = d.setdefault("nest101", {})
+          b["version"] = os.environ["V"]
+          b["fecha"] = "$FECHA"
+          b["notas"] = [x for x in open("../notas.txt", encoding="utf-8").read().split("\n") if x.strip()]
+          b["pagina"] = "https://github.com/mikebalcazar/descargas#readme"
+          b["windows"] = {
+              "archivo": f"nest101-{os.environ['V']}-setup.exe",
+              "bytes": int(os.environ["BYTES"]),
+              "sha256": os.environ["SHA"],
+              "url": f"https://github.com/mikebalcazar/descargas/releases/download/nest101-{os.environ['V']}/nest101-{os.environ['V']}-setup.exe",
+              "ultima": "https://github.com/mikebalcazar/descargas/releases/tag/nest101-ultima",
+              "fijo": "https://github.com/mikebalcazar/descargas/releases/download/nest101-ultima/nest101-setup.exe",
+          }
+          json.dump(d, open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          PY
+          # el renglón de nest101 en la tabla del README
+          python - <<PY
+          import re, os
+          v, megas = os.environ["V"], os.environ["MEGAS"]
+          s = open("README.md", encoding="utf-8").read()
+          fila = (f"| **nest101** | {v} | $FECHA | "
+                  f"[nest101-{v}-setup.exe](https://github.com/mikebalcazar/descargas/releases/download/nest101-{v}/nest101-{v}-setup.exe) | "
+                  f"[nest101-ultima](https://github.com/mikebalcazar/descargas/releases/tag/nest101-ultima) | {megas} MB |")
+          s = re.sub(r"^\|\s*\*\*nest101\*\*.*$", fila, s, flags=re.M)
+          s = re.sub(r"^_Actualizado .*_$", f"_Actualizado $FECHA._", s, flags=re.M)
+          open("README.md", "w", encoding="utf-8").write(s)
+          PY
+          git add nest101.json README.md
+          git commit -m "nest101 $V: instalador publicado, contrato y tabla al día" || echo "sin cambios"
+          git push origin main
+
+      # Lo que se publicó se comprueba bajándolo de la dirección real. Si esto
+      # sale rojo, la release está mal aunque todo lo anterior saliera verde.
+      - name: Comprobar lo publicado
+        if: inputs.publicar
+        shell: bash
+        env:
+          V: ${{ inputs.version }}
+          SHA: ${{ steps.medir.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          sleep 10
+          curl -sL -o bajado.exe \
+            "https://github.com/mikebalcazar/descargas/releases/download/nest101-$V/nest101-$V-setup.exe"
+          h=$(sha256sum bajado.exe | cut -d' ' -f1)
+          echo "huella publicada: $h"
+          [ "$h" = "$SHA" ] || { echo "NO cuadra con la compilada: $SHA" >&2; exit 1; }
+          curl -s "https://raw.githubusercontent.com/mikebalcazar/descargas/main/nest101.json" \
+            | python -c "import json,sys,os; d=json.load(sys.stdin)['nest101']; \
+                assert d['version']==os.environ['V'], d['version']; \
+                assert d['windows']['sha256']==os.environ['SHA']; \
+                print('nest101.json al día:', d['version'], d['fecha'])"
+          rm -f bajado.exe

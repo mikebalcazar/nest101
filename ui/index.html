@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>nest101</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ---------------- #018 · PANTALLA DE INICIO ---------------- -->
+<div id="inicio">
+  <div class="panel">
+    <button class="cerrar" id="iCerrar" title="Volver al proyecto abierto (Esc)">×</button>
+
+    <div class="marca">
+      <img id="iLogoImg" class="logoimg" alt="nest101" hidden>
+      <div class="nm" id="iLogoTxt">nest<b>101</b></div>
+      <div class="sub">Despiece de gabinetes para corte CNC</div>
+    </div>
+
+    <div class="cols">
+      <div class="acciones">
+        <button class="tarj nueva" id="iNuevo">
+          <span class="ic">+</span>
+          <span class="txt"><b>Mueble nuevo</b>
+            <small>Empieza en blanco</small></span>
+        </button>
+        <button class="tarj" id="iAbrir">
+          <span class="ic">↥</span>
+          <span class="txt"><b>Abrir un mueble…</b>
+            <small>Archivos .t101x</small></span>
+        </button>
+        <button class="tarj" id="iProyecto">
+          <span class="ic">▤</span>
+          <span class="txt"><b>Abrir un proyecto…</b>
+            <small>La carpeta con todos sus muebles</small></span>
+        </button>
+      </div>
+
+      <div class="recientes">
+        <div class="hd">Recientes <button class="limpiar" id="iOlvidar"
+             title="Vaciar la lista">limpiar</button></div>
+        <div class="lista" id="iRecientes"></div>
+      </div>
+    </div>
+
+    <div class="pie">
+      <span id="iVersion">—</span>
+      <span id="iAyuda">Las medidas van en milímetros. Todo se puede cambiar después.</span>
+    </div>
+  </div>
+</div>
+
+<header>
+  <img id="bLogoImg" class="logoimg" alt="nest101" hidden>
+  <span class="logo" id="bLogoTxt">nest<b>101</b></span>
+  <div class="sep"></div>
+  <input class="tit" id="pNombre" value="Cocina sin nombre" placeholder="Nombre del proyecto">
+  <input class="cli" id="pCliente" placeholder="Cliente">
+  <div class="sep"></div>
+  <!-- #085 — Configuración general del taller. Va en la barra de arriba, junto
+       al tema: es lo del TALLER (idioma, logotipo, dónde vive todo), no lo de
+       esta cocina, que sigue en las pestañas de la derecha. -->
+  <!-- #091 — Ayuda ▾, como draw101. Aquí viven las tres cosas que no son del
+       mueble: actualizaciones, avisos de Taller 101 y licencias. -->
+  <div class="menu" id="mAyuda">
+    <button class="gh" id="bAyuda">Ayuda ▾<span class="punto" id="pAvisos" hidden>•</span></button>
+    <div class="desplegable" id="dAyuda" hidden>
+      <button id="aActualizar">Buscar actualizaciones</button>
+      <button id="aAvisos">Avisos<span class="n" id="nAvisos"></span></button>
+      <button id="aLicencias">Licencias de terceros</button>
+    </div>
+  </div>
+  <button class="gh ic" id="bConfig" title="Configuración general">⚙</button>
+  <button class="gh ic" id="bTema" title="Cambiar entre claro y oscuro">◐</button>
+  <button class="gh ic" id="bInicio" title="Pantalla de inicio (Ctrl+I)">⌂</button>
+  <button class="gh" id="bNuevo">Nuevo</button>
+  <button class="gh" id="bAbrir">Abrir</button>
+  <button class="gh" id="bProyecto" title="Abrir un proyecto: todos sus muebles a la vez">Proyecto…</button>
+  <button class="gh" id="bGuardar">Guardar<span id="puntoSucio">•</span></button>
+  <div class="sep"></div>
+  <button class="gh ic" id="bDeshacer" title="Deshacer (Ctrl+Z)" disabled>↶</button>
+  <button class="gh ic" id="bRehacer" title="Rehacer (Ctrl+Shift+Z)" disabled>↷</button>
+  <div class="der">
+    <span id="estado">listo</span>
+    <!-- #071 — estaba escondido dentro de la pestaña de resultados «Proyecto
+         completo», y ahí sólo aparecía después de calcular. Va aquí, junto al
+         otro botón de exportar, que es donde se busca. -->
+    <!-- #087 — sólo aparece cuando hay versión nueva. Un botón que casi
+         siempre dice «estás al día» es un botón que nadie vuelve a mirar. -->
+    <button class="gh act" id="bActualizar" hidden>Actualizar</button>
+    <button class="gh" id="bExportarProy"
+            title="Todos los muebles abiertos, con el nesting hecho una sola vez">
+      Exportar proyecto…</button>
+    <button class="pri" id="bExportar">Exportar este mueble</button>
+  </div>
+</header>
+
+<!-- #036 — pestañas de muebles. Cada una es un archivo .t101x abierto. -->
+<div id="pestanas">
+  <div class="tiras" id="tiras"></div>
+  <button class="mas" id="bNuevaPestana" title="Otro mueble (Ctrl+T)">+</button>
+</div>
+
+<main>
+  <!-- ---------------- IZQUIERDA: gabinetes ---------------- -->
+  <div class="col" id="izq">
+    <div class="hd">Gabinetes <span class="n" id="nGab">0</span></div>
+    <div class="scroll" id="listaGab"></div>
+    <div style="padding:10px;border-top:1px solid var(--linea);display:grid;gap:6px">
+      <button class="pri" id="bAgregar">+ Agregar gabinete</button>
+      <button class="gh" id="btnLeerPlano" title="Leer un plano y sacar los módulos">
+        Leer plano…</button>
+      <button class="gh" id="bDuplicar">Duplicar seleccionado</button>
+      <button class="gh" id="bGuardarModelo" title="Guardar este gabinete para usarlo en otras cocinas">
+        ☆ Guardar como modelo</button>
+    </div>
+  </div>
+
+  <!-- ---------------- CENTRO: 3D ---------------- -->
+  <div class="col" id="centro">
+    <canvas id="lienzo"></canvas>
+    <div class="overlay" id="ctrl3d">
+      <span style="font-size:11px;color:var(--txt2)">Explosión</span>
+      <input type="range" id="explo" min="0" max="100" value="0">
+      <span id="exploVal" style="font-size:11px;width:26px;color:var(--txt2)">0%</span>
+      <div class="sep" style="height:16px"></div>
+      <button class="gh act" id="bMover" style="padding:3px 8px;font-size:11px"
+              title="Arrastra los gabinetes sobre el piso">Mover</button>
+      <button class="gh" id="bGirar" style="padding:3px 8px;font-size:11px"
+              title="Gira 90° el seleccionado (tecla R)">Girar 90°</button>
+      <div class="sep" style="height:16px"></div>
+      <button class="gh act" id="bCotas" style="padding:3px 8px;font-size:11px">Cotas</button>
+      <button class="gh" id="bColor" style="padding:3px 8px;font-size:11px"
+              title="Color por material o por rol de la pieza">Color: material</button>
+      <button class="gh" id="bVista" style="padding:3px 8px;font-size:11px">Encuadrar</button>
+      <button class="gh act" id="bCantos" style="padding:3px 8px;font-size:11px">Aristas</button>
+    </div>
+    <div id="cotas3d"></div>
+    <div id="problema"><span class="ic">!</span><span class="txt"></span></div>
+    <div class="overlay" id="leyenda"></div>
+    <div class="overlay" id="info3d"></div>
+  </div>
+
+  <!-- ---------------- DERECHA: parámetros ---------------- -->
+  <div class="col" id="der">
+    <div class="tabs">
+      <button data-p="pGab" class="on">Gabinete</button>
+      <button data-p="pMat">Materiales</button>
+      <button data-p="pStd">Estándar</button>
+    </div>
+    <div class="scroll">
+
+      <!-- ---- gabinete ---- -->
+      <div class="pane on" id="pGab">
+        <div id="sinSel" class="vacio">Selecciona o agrega un gabinete<br>para editar sus parámetros.</div>
+        <div id="formGab" style="display:none">
+
+          <div class="sec">
+            <h3>Identificación</h3>
+            <div class="fila"><label>Nombre</label><input id="gNombre"></div>
+            <div class="g2">
+              <div><label>Tipo</label>
+                <select id="gTipo"><option value="base">Bajo / base</option>
+                  <option value="aereo">Aéreo</option></select></div>
+              <div><label>Cantidad</label><input type="number" id="gCant" min="1" value="1"></div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <h3>Medidas generales (mm)</h3>
+            <div class="g2">
+              <div><label>Ancho</label><input type="number" id="gAncho" step="1"></div>
+              <div><label>Prof.</label><input type="number" id="gProf" step="1"></div>
+            </div>
+
+            <div class="alturas">
+              <div class="ah">Alturas <span>el candado marca la que se calcula</span></div>
+              <div class="alt" data-a="total">
+                <button class="cand" data-lock="total" title="Calcular esta">🔓</button>
+                <div><label>Total</label><input type="number" id="gAlto" step="1"></div>
+              </div>
+              <div class="alt" data-a="cuerpo">
+                <button class="cand" data-lock="cuerpo" title="Calcular esta">🔓</button>
+                <div><label>Cuerpo</label><input type="number" id="gAltoCuerpo" step="1"></div>
+              </div>
+              <div class="alt" data-a="zoclo">
+                <button class="cand" data-lock="zoclo" title="Calcular esta">🔓</button>
+                <div><label>Zoclo <span id="gZocloOrigen" class="orig"></span></label>
+                  <input type="number" id="gAlturaZoclo" step="1"></div>
+                <button class="limpiar" id="gZocloReset" title="Volver al valor del proyecto">↺</button>
+              </div>
+            </div>
+            <div style="font-size:10.5px;color:var(--txt3);margin-top:6px" id="gNota"></div>
+            <div id="gAlertaAlturas" class="alerta" style="display:none"></div>
+          </div>
+
+          <div class="sec">
+            <h3>Configuración</h3>
+            <div class="g2" style="margin-bottom:9px">
+              <div><label>Entrepaños</label><input type="number" id="gEnt" min="0" value="1"></div>
+              <div style="display:flex;align-items:flex-end">
+                <div class="chk" style="margin:0"><input type="checkbox" id="gEntFijos">
+                  <label for="gEntFijos">Fijos</label></div>
+              </div>
+            </div>
+            <div class="chk"><input type="checkbox" id="gTapa"><label for="gTapa">Tapa superior completa</label></div>
+            <div class="chk"><input type="checkbox" id="gRespaldo">
+              <label for="gRespaldo">Respaldo completo <span id="gRespaldoOrigen" class="orig"></span></label></div>
+            <div class="chk"><input type="checkbox" id="gZoclo"><label for="gZoclo">Con zoclo</label></div>
+            <div class="chk"><input type="checkbox" id="gCubierta">
+              <label for="gCubierta">Lleva cubierta encima</label></div>
+            <!-- #075 — el vuelo es por mueble: una isla suele volar de los dos
+                 lados y el resto de la cocina no. -->
+            <div class="fila" id="filaVuelo">
+              <label>Vuelo de la cubierta (mm)
+                <span id="gVueloOrigen" class="orig"></span></label>
+              <div style="display:flex;gap:6px">
+                <input type="number" id="gVuelo" step="5">
+                <button class="gh" id="gVueloReset" title="Volver al valor del proyecto"
+                        style="padding:4px 8px;flex:none">↺</button>
+              </div>
+              <div style="font-size:10.5px;color:var(--txt3);margin-top:4px">
+                Sale del fondo declarado: el cuerpo se corta lo que queda.</div>
+            </div>
+            <div class="chk"><input type="checkbox" id="gGola">
+              <label for="gGola">Gola <span id="gGolaOrigen" class="orig"></span></label></div>
+            <div class="chk"><input type="checkbox" id="gUnero">
+              <label for="gUnero">Uñero <span id="gUneroOrigen" class="orig"></span></label></div>
+            <div class="fila" id="filaGola" style="display:none">
+              <label>Alto de la gola (mm)</label>
+              <div style="display:flex;gap:6px">
+                <input type="number" id="gAltoGola" step="5">
+                <button class="gh" id="gGolaReset" title="Volver al valor del proyecto"
+                        style="padding:4px 8px;flex:none">↺</button>
+              </div>
+              <div style="font-size:10.5px;color:var(--txt3);margin-top:4px">
+                Se le quita al frente de arriba. El cuerpo no cambia.</div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <h3>Frentes <span style="float:right;font-weight:400;text-transform:none;
+              letter-spacing:0;color:var(--txt3)">de arriba hacia abajo</span></h3>
+            <div id="listaFrentes"></div>
+            <div class="g2" style="margin-top:8px">
+              <button class="gh" id="bAddPuerta">+ Puerta</button>
+              <button class="gh" id="bAddCajon">+ Cajón</button>
+            </div>
+            <div style="font-size:10.5px;color:var(--txt3);margin-top:7px">
+              Alto vacío = reparte el espacio sobrante.</div>
+          </div>
+
+          <div class="sec">
+            <h3>Posición en la cocina (mm)</h3>
+            <div class="g3">
+              <div><label>X</label><input type="number" id="gPosX" step="10"></div>
+              <div><label>Z (fondo)</label><input type="number" id="gPosZ" step="10"></div>
+              <div><label>Giro</label>
+                <select id="gRot"><option value="0">0°</option><option value="90">90°</option>
+                <option value="180">180°</option><option value="270">270°</option></select></div>
+            </div>
+            <div class="fila" id="filaColgado" style="margin-top:9px">
+              <label>Altura de colgado <span id="gColgadoOrigen" class="orig"></span></label>
+              <div style="display:flex;gap:6px">
+                <input type="number" id="gColgado" step="10">
+                <button class="gh" id="gColgadoReset" title="Volver al valor del proyecto"
+                        style="padding:4px 8px;flex:none">↺</button>
+              </div>
+            </div>
+            <div style="font-size:10.5px;color:var(--txt3);margin-top:4px">
+              También puedes arrastrarlo en la vista 3D.</div>
+          </div>
+
+          <div class="sec">
+            <h3>Materiales de este gabinete</h3>
+            <div class="fila"><label>Interior / cuerpo</label><select id="gMatCuerpo"></select></div>
+            <div class="fila"><label>Frentes</label><select id="gMatFrente"></select></div>
+            <div class="fila"><label>Respaldo</label><select id="gMatRespaldo"></select></div>
+            <div style="font-size:10.5px;color:var(--txt3)">
+              «Del proyecto» usa lo definido en la pestaña Estándar.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---- materiales ---- -->
+      <div class="pane" id="pMat">
+        <div class="aviso">Precios en MXN. El costeo se calcula por hojas completas
+          consumidas en el nesting, más metros lineales de canto.</div>
+        <table class="mat"><thead><tr>
+          <th title="Color en el 3D">C</th><th>Material</th><th class="n">Esp.</th>
+          <th class="n">$ hoja</th><th class="n">$ canto</th>
+          <th class="n" title="Grosor del cubrecanto de este material (0 = el del estándar)">Canto</th>
+          <th title="Respetar veta">V</th><th></th>
+        </tr></thead><tbody id="tbMat"></tbody></table>
+        <button class="gh" id="bAddMat" style="margin-top:10px;width:100%">+ Agregar material</button>
+        <div class="sec" style="margin-top:16px">
+          <h3>Medida de hoja por material</h3>
+          <div id="hojasMat"></div>
+        </div>
+      </div>
+
+      <!-- ---- estándar ---- -->
+      <div class="pane" id="pStd">
+        <div class="sec">
+          <h3>Leer plano</h3>
+          <div style="font-size:11.5px;color:var(--txt3);margin-bottom:8px">
+            Se teclea una vez. Queda en este equipo, en tu carpeta de Taller 101
+            — nunca dentro del programa.</div>
+          <div class="fila"><label>Llave de Anthropic</label>
+            <input id="sLlave" type="password" placeholder="sk-ant-…"
+                   autocomplete="off" spellcheck="false"></div>
+          <div class="fila"><label></label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="gh" id="bLlaveGuardar" style="padding:4px 10px">Guardar</button>
+              <button class="gh" id="bLlaveQuitar" style="padding:4px 10px">Quitar</button>
+              <span id="llaveEstado" style="font-size:11.5px;color:var(--txt3)"></span>
+            </div></div>
+        </div>
+        <div class="sec">
+          <h3>Materiales por defecto</h3>
+          <div class="fila"><label>Cuerpo</label><select id="sMatCuerpo"></select></div>
+          <div class="fila"><label>Frentes</label><select id="sMatFrente"></select></div>
+          <div class="fila"><label>Respaldo</label><select id="sMatRespaldo"></select></div>
+          <div class="fila"><label>Caja de cajón</label><select id="sMatCajon"></select></div>
+          <div class="fila"><label>Fondo de cajón</label><select id="sMatFondo"></select></div>
+          <!-- #067 — el manguete es pieza de CUERPO; sólo se cambia cuando su
+               canto queda a la vista y se quiere que combine con los frentes. -->
+          <div class="fila"><label>Manguete del uñero</label><select id="sMatManguete"></select></div>
+        </div>
+        <div class="sec">
+          <h3>Ensamble</h3>
+          <div class="fila"><label>Sistema</label>
+            <select id="sEnsamble">
+              <option value="minifix">Minifix + tarugo</option>
+              <option value="confirmat">Confirmat</option>
+              <option value="tarugo">Sólo tarugo</option>
+              <option value="ranura">Ranura y lengüeta</option>
+            </select></div>
+          <div class="g2">
+            <div><label>Paso sistema</label><input type="number" id="sPaso" step="1"></div>
+            <div><label>Offset línea</label><input type="number" id="sOffset" step="1"></div>
+          </div>
+        </div>
+        <div class="sec">
+          <h3>Holguras (mm)</h3>
+          <div class="g2">
+            <div><label>Perimetral frente</label><input type="number" id="sHp" step="0.5"></div>
+            <div><label>Entre frentes</label><input type="number" id="sHef" step="0.5"></div>
+            <div><label title="Entre el canto del costado y la cara de atrás del frente: ahí van la bisagra y el tope">Frente ↔ costado</label>
+              <input type="number" id="sHfc" step="0.5"></div>
+            <div><label>Corredera / lado</label><input type="number" id="sCorr" step="0.1"></div>
+            <div><label>Entrepaño</label><input type="number" id="sHent" step="0.5"></div>
+          </div>
+        </div>
+        <div class="sec">
+          <h3>Respaldo y zoclo</h3>
+          <div class="chk"><input type="checkbox" id="sRespaldoCompleto">
+            <label for="sRespaldoCompleto">Respaldo de tablero completo</label></div>
+          <div class="fila"><label>Ancho del travesaño</label>
+            <input type="number" id="sAnchoTravRespaldo" step="10"></div>
+          <div style="font-size:10.5px;color:var(--txt3);margin-bottom:8px">
+            Sin palomita, el respaldo son <b>dos travesaños</b> —uno arriba y otro
+            abajo, como la tapa— y el hueco de en medio deja pasar las
+            instalaciones hidráulicas. Salen del material del cuerpo, no del de
+            respaldo. Se puede cambiar mueble por mueble.</div>
+          <div class="chk"><input type="checkbox" id="sRanurado"><label for="sRanurado">Respaldo ranurado</label></div>
+          <div class="g2">
+            <div><label>Prof. ranura</label><input type="number" id="sPranura" step="0.5"></div>
+            <div><label>Offset ranura</label><input type="number" id="sOranura" step="0.5"></div>
+            <div><label>Altura zoclo</label><input type="number" id="sZoclo" step="1"></div>
+            <div><label>Retranqueo zoclo</label><input type="number" id="sRetZoclo" step="1"></div>
+          </div>
+        </div>
+        <div class="sec">
+          <h3>Colocación</h3>
+          <div class="g2">
+            <div><label>Colgado de aéreos</label><input type="number" id="sColgado" step="10"></div>
+            <div><label>Imán entre muebles</label><input type="number" id="sIman" step="5"></div>
+            <div><label>Rejilla de arrastre</label><input type="number" id="sRejilla" step="1"></div>
+            <div><label>Respaldo interior desde</label>
+              <input type="number" id="sRespInt" step="1"></div>
+          </div>
+        </div>
+        <div class="sec">
+          <h3>Cubierta y nariz</h3>
+          <div class="fila"><label>Material de cubierta</label><select id="sMatCubierta"></select></div>
+          <div class="g2">
+            <div><label>Vuelo al frente</label><input type="number" id="sVuelo" step="5"></div>
+            <div><label>Voladizo lateral</label><input type="number" id="sVoladizo" step="5"></div>
+            <div><label>Alto de nariz</label><input type="number" id="sNariz" step="5"></div>
+            <div><label>Junta entre tramos</label><input type="number" id="sJunta" step="1"></div>
+          </div>
+          <div class="fila" style="margin-top:9px"><label>Perfil de nariz</label>
+            <select id="sPerfilNariz">
+              <option value="recta">Recta</option>
+              <option value="boleada">Boleada</option>
+              <option value="chaflan">Chaflán</option>
+              <option value="doblada">Doblada</option>
+            </select></div>
+          <div style="font-size:10.5px;color:var(--txt3)">
+            Alto de nariz 0 = se ve el espesor del material. Si es mayor, se
+            calcula el doblado que hay que pegar por debajo.</div>
+        </div>
+
+        <div class="sec">
+          <h3>Uñero</h3>
+          <div class="chk"><input type="checkbox" id="sUnero">
+            <label for="sUnero">Los muebles llevan uñero</label></div>
+          <div class="fila"><label>Alto del manguete</label>
+            <input type="number" id="sAltoManguete" step="5"></div>
+          <div class="fila"><label>Hueco bajo la nariz</label>
+            <input type="number" id="sHolguraUnero" step="5"></div>
+          <div style="font-size:10.5px;color:var(--txt3)">
+            La puerta se corta a 45° en su canto de arriba y encima queda un
+            manguete fijo: los dedos entran en el chaflán. El manguete sale en la
+            lista de corte como una pieza más de frente.<br><br>
+            Las dos medidas se cuentan <b>desde la base de la nariz</b> de la
+            cubierta, no desde la tapa: el manguete arranca ahí y baja su alto,
+            y la puerta empieza el hueco más abajo. Si la cubierta lleva nariz,
+            el uñero completo baja con ella.</div>
+        </div>
+        <div class="sec">
+          <h3>Gola</h3>
+          <div class="chk"><input type="checkbox" id="sGola">
+            <label for="sGola">Los muebles llevan gola</label></div>
+          <div class="fila"><label>Alto de la gola</label><input type="number" id="sAltoGola" step="5"></div>
+          <div style="font-size:10.5px;color:var(--txt3)">
+            Se descuenta del alto disponible para los frentes. El cuerpo del
+            mueble no cambia: el perfil va atornillado al canto.</div>
+        </div>
+
+        <div class="sec">
+          <h3>Corte CNC</h3>
+          <div class="g2">
+            <div><label>Kerf (fresa)</label><input type="number" id="sKerf" step="0.1"></div>
+            <div><label title="Grosor del disco de la seccionadora. 0 = el mismo de la fresa">Kerf (sierra)</label>
+              <input type="number" id="sKerfSierra" step="0.1"></div>
+            <div><label>Separación piezas</label><input type="number" id="sSep" step="0.5"></div>
+            <div><label>Margen de hoja</label><input type="number" id="sMargen" step="1"></div>
+            <div><label>Alto caja cajón</label><input type="number" id="sAltoCaja" step="1"></div>
+          </div>
+          <div class="chk" style="margin-top:9px"><input type="checkbox" id="sDescCanto">
+            <label for="sDescCanto">Descontar el cubrecanto de la medida de corte</label></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- ---------------- RESULTADOS ---------------- -->
+<div id="abajo">
+  <div class="hd" id="hdAbajo">
+    Resultados <span id="flecha" style="color:var(--txt3)">▾</span>
+    <div class="kpis">
+      <span>Piezas <b id="kPz">0</b></span>
+      <span>Únicas <b id="kUn">0</b></span>
+      <span>Hojas <b id="kHj">0</b></span>
+      <span>Material <b id="kM2">0</b> m²</span>
+      <span>Aprov. <b id="kAp">0</b>%</span>
+      <span class="costo">Costo <b id="kCosto">$0</b></span>
+    </div>
+  </div>
+  <div class="rtabs">
+    <button data-r="rCorte" class="on">Lista de corte</button>
+    <button data-r="rHojas">Hojas de nesting</button>
+    <button data-r="rCosteo">Costeo</button>
+    <button data-r="rCub">Cubiertas</button>
+    <button data-r="rProy" title="Despiece de todos los muebles abiertos, juntos">Proyecto completo</button>
+  </div>
+  <div class="rpane" id="rProy"><div id="proyCuerpo" style="padding:14px"></div></div>
+  <div class="rpane on" id="rCorte"><table><thead><tr>
+    <th>Código</th><th>Mueble</th><th>Pieza</th><th>Material</th>
+    <th class="n">Esp.</th><th class="n">Corte L</th><th class="n">Corte A</th>
+    <th class="n">Cant.</th><th class="n">Canto ml</th><th>Nota</th>
+  </tr></thead><tbody id="tbCorte"></tbody></table></div>
+  <div class="rpane" id="rHojas"><div id="hojasCv"></div></div>
+  <div class="rpane" id="rCub"><table><thead><tr>
+    <th>Tramo</th><th>Material</th><th class="n">Esp.</th><th class="n">Largo</th>
+    <th class="n">Fondo</th><th class="n">m²</th><th class="n">Nariz</th>
+    <th class="n">ML nariz</th><th class="n">ML doblado</th><th>Sobre</th><th>Nota</th>
+  </tr></thead><tbody id="tbCub"></tbody></table></div>
+  <div class="rpane" id="rCosteo"><table><thead><tr>
+    <th>Material</th><th class="n">Esp.</th><th class="n">Hojas</th><th class="n">$ hoja</th>
+    <th class="n">Costo material</th><th class="n">ML canto</th><th class="n">Costo canto</th>
+    <th class="n">Total</th>
+  </tr></thead><tbody id="tbCosteo"></tbody></table></div>
+</div>
+
+<!-- ---------------- #025 · CATÁLOGO PARA AGREGAR ---------------- -->
+<div class="tienda" id="tienda"><div class="caja">
+  <div class="cab">
+    <b>Agregar gabinete</b>
+    <input id="tBuscar" placeholder="Buscar por nombre o medida…">
+    <button class="gh ic" id="tCerrar" title="Cerrar (Esc)">×</button>
+  </div>
+  <!-- #086 — barra de categorías. La librería dejó de ser una lista larga:
+       cada categoría es una carpeta de módulos, y aquí se escoge cuál se ve. -->
+  <div class="cats" id="tCats"></div>
+  <div class="scroll">
+    <div class="notacat" id="tNota"></div>
+    <div class="rejilla" id="tModelos"></div>
+    <div class="vacio" id="tVacio" hidden></div>
+  </div>
+</div></div>
+
+<!-- ---------------- MODAL ---------------- -->
+<div class="modal" id="modal"><div class="caja">
+  <h2 id="mTit">Exportar</h2>
+  <div id="mCuerpo"></div>
+  <div class="pie"><button class="gh" id="mCancel">Cerrar</button>
+    <button class="pri" id="mOk">Aceptar</button></div>
+</div></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
