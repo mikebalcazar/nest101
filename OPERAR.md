@@ -20,6 +20,36 @@ bien, ese chat no leyó este archivo.
 
 ---
 
+## 0. Cómo se le pregunta a Mike: una por una, con botones
+
+**Lo pidió Mike el 12-sep-2026 y es la forma, no una preferencia.** Vale para
+cualquier chat de la suite, en cualquier repositorio, siempre:
+
+1. **Una sola pregunta por vez.** Nunca dos, nunca una lista. Se hace la que
+   desbloquea el trabajo, se espera la respuesta, y hasta entonces la
+   siguiente.
+2. **Con opciones, en botones**, no en prosa. En Claude Code es
+   `AskUserQuestion`. Cada opción dice **qué implica**, no sólo qué se llama.
+3. **Con una recomendación.** La opción que el chat recomienda va primera y
+   marcada `(Recomendado)`. Mike decide; el chat no se lava las manos.
+4. **Con la consecuencia dicha antes, no después.** Si una opción tiene un
+   costo —dos aplicaciones escribiendo en dos bases, datos que divergen,
+   algo irreversible— se dice en la opción misma. Una decisión tomada sin su
+   consecuencia enfrente no es una decisión.
+5. **Se anota.** Toda respuesta de Mike queda en el muro
+   (`suite101-api/muro/`) y en el `claude/continuar.md` del repositorio, con
+   la fecha. Una decisión que no quedó escrita se vuelve a preguntar, y
+   preguntar dos veces lo mismo es el error que esta sección existe para
+   evitar.
+
+**Lo que NO se hace:** juntar tres decisiones en un mensaje, mandarle una
+tabla de opciones para que conteste por escrito, preguntar cosas que el chat
+puede medir por su cuenta, ni seguir adelante «suponiendo» una respuesta. Si
+una decisión de verdad bloquea, se para y se pregunta; si no bloquea, se
+avanza con lo que no depende de ella y se pregunta al llegar.
+
+---
+
 ## 1. Arranque (esto va primero, siempre)
 
 **Lo primero es comprobar que puedes empujar.** No buscar un token: empujar
@@ -216,8 +246,10 @@ tampoco ahí, se le dice a Mike qué quedó sin verificar. Nunca se supone.
   clientes reales. Las capturas y las pruebas van contra la org **`demo` en
   staging** —«Familia Ramírez», «Cocina Ramírez»—, nunca contra producción
   (decisión D6).
+- **Preguntarle a Mike dos cosas a la vez, o preguntarle sin botones.** Una
+  por una, con opciones, con recomendación y con la consecuencia dicha (§0).
 - Inventar un procedimiento nuevo. Si este archivo no cubre el caso, se resuelve
-  **y se agrega aquí**, en los siete repositorios.
+  **y se agrega aquí**, en los once repositorios.
 
 ## 9. Lo único que sigue necesitando a Mike
 
