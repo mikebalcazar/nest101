@@ -1,4 +1,23 @@
 """Verificación: cierre dimensional, integridad de nesting y conteos."""
+import sys
+
+# #091 — En Windows la consola no habla UTF-8: sale en cp1252 o en la página de
+# códigos que tenga el equipo, y ahí no existen ni «→» ni «ñ». Los mensajes de
+# abajo están llenos de las dos cosas, así que el primer `print` reventaba con
+# UnicodeEncodeError y las 93 comprobaciones morían antes de decir si pasaban.
+# En Linux nunca se notó, porque ahí la consola sí es UTF-8: por eso el «93 de
+# 93» de todos los chats anteriores estaba medido sólo en Linux, y la primera
+# corrida de apps.yml en Windows falló en este paso.
+#
+# `errors="replace"` es a propósito: si alguna consola rara tampoco puede con
+# un carácter, se ve un signo de interrogación, pero la verificación termina y
+# dice si pasó. Nunca se muere por un acento.
+for _flujo in (sys.stdout, sys.stderr):
+    try:
+        _flujo.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from core.config import Estandar
 from core.modelos import (despiezar, _repartir_frentes, vuelo_de, holgura_frente,
                           espesor_cubierta)
