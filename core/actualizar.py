@@ -127,6 +127,11 @@ def leer_estado(d) -> dict:
     n = bloque.get("notas", "")
     out["notas"] = "\n".join(str(x) for x in n) if isinstance(n, list) else str(n or "")
 
+    # #094 — El nombre del archivo lo publica el flujo; antes no se leía y cada
+    # quien lo inventaba por su lado. Si faltara, se saca del final de la URL, y
+    # sólo si tampoco hay URL se arma por convención. Se limpia de separadores:
+    # este nombre acaba siendo parte de una ruta en disco, y un `..` o una barra
+    # metidos en el JSON no tienen por qué poder escribir fuera de su carpeta.
     out["sha256"] = str(win.get("sha256", "") or "")
     out["bytes"] = int(win.get("bytes") or 0)
     # El enlace del archivo viene con su versión adentro. Si faltara, queda la
@@ -135,7 +140,28 @@ def leer_estado(d) -> dict:
     # El enlace fijo, si el publicador lo escribió. Es el mismo archivo; cambia
     # sólo en que su nombre no lleva versión.
     out["url_fija"] = str(win.get("fijo") or URL_FIJA)
+    # #094 — El nombre del archivo lo publica el flujo; antes no se leía y cada
+    # quien lo inventaba por su lado. Si faltara, se saca del final de la URL, y
+    # sólo si tampoco hay URL se arma por convención. Se limpia de separadores:
+    # este nombre acaba siendo parte de una ruta en disco, y un «..» o una barra
+    # metidos en el JSON no tienen por qué poder escribir fuera de su carpeta.
+    out["archivo"] = _nombre_sano(win.get("archivo"), out["url"], out["version"])
     return out
+
+
+def _nombre_sano(publicado, url: str, version: str) -> str:
+    """El nombre del instalador, en ese orden: el publicado, el de la URL, la
+    convención. Nunca una ruta: sólo el último tramo, sin separadores."""
+    for cand in (publicado, url.split("?")[0].rsplit("/", 1)[-1] if url else ""):
+        nombre = os.path.basename(str(cand or "").replace("\\", "/").strip())
+        # Tres condiciones, y las tres por algo: que sea un instalador, que no
+        # traiga «..» y que se llame como este programa. La última es la que
+        # impide que un JSON torcido nos haga escribir encima de otro archivo
+        # de la carpeta de descargas del taller.
+        if (nombre.lower().endswith(".exe") and ".." not in nombre
+                and nombre.lower().startswith(APP.lower())):
+            return nombre
+    return f"{APP}-{version}-setup.exe" if version else ""
 
 
 def revisar(instalada: str, forzar: bool = False) -> dict:
@@ -152,7 +178,7 @@ def revisar(instalada: str, forzar: bool = False) -> dict:
         return d
 
     base = {"hay": False, "instalada": instalada, "version": "", "notas": "",
-            "fecha": "", "bytes": 0, "sha256": "",
+            "fecha": "", "bytes": 0, "sha256": "", "archivo": "",
             "url": URL_ULTIMA, "url_fija": URL_FIJA,
             "url_todas": URL_TODAS, "error": ""}
     try:
@@ -231,7 +257,7 @@ def revisar_si_toca(instalada: str) -> dict:
     p = politica()
     if not p["revisar_solo"]:
         return {"hay": False, "instalada": instalada, "version": "",
-                "notas": "", "fecha": "", "bytes": 0, "sha256": "",
+                "notas": "", "fecha": "", "bytes": 0, "sha256": "", "archivo": "",
                 "url": URL_ULTIMA, "url_fija": URL_FIJA, "url_todas": URL_TODAS,
                 "error": "", "apagada": True}
     if not toca_revisar() and _CACHE.get("dato"):
@@ -330,16 +356,21 @@ def _anotar(**kw) -> None:
         _BAJADA.update(kw)
 
 
-def destino_de(version: str) -> str:
+def destino_de(version: str, archivo: str = "") -> str:
     """Dónde queda el instalador de una versión.
 
     En la carpeta del taller, no en Temp: si algo sale mal, el archivo sigue
-    ahí y se puede instalar a mano sin volver a bajar 180 MB. Es además la
+    ahí y se puede instalar a mano sin volver a bajar 120 MB. Es además la
     única carpeta desde la que el escritorio acepta ejecutar un instalador.
+
+    #094 — El nombre se toma del que publica el flujo cuando viene; antes se
+    armaba siempre por convención. Guardar con un nombre e ir a buscar con otro
+    es la clase de desajuste que nadie nota hasta que la app se baja 120 MB dos
+    veces, o peor, se los baja cada arranque creyendo que no los tiene.
     """
     from .taller import carpeta
-    return os.path.join(str(carpeta()), "descargas",
-                        f"{APP}-{version}-setup.exe")
+    nombre = _nombre_sano(archivo, "", version) or f"{APP}-{version}-setup.exe"
+    return os.path.join(str(carpeta()), "descargas", nombre)
 
 
 def ya_bajada(r: dict) -> str:
@@ -352,7 +383,7 @@ def ya_bajada(r: dict) -> str:
     ver = str(r.get("version") or "")
     if not ver:
         return ""
-    d = destino_de(ver)
+    d = destino_de(ver, str(r.get("archivo") or ""))
     try:
         if os.path.isfile(d) and (not r.get("bytes")
                                   or os.path.getsize(d) == int(r["bytes"])):
@@ -391,7 +422,7 @@ def arrancar_descarga(r: dict, forzar: bool = False) -> dict:
                         "leidos": 0, "total": int(r.get("bytes") or 0),
                         "porcentaje": 0, "error": ""})
 
-    destino = destino_de(ver)
+    destino = destino_de(ver, str(r.get("archivo") or ""))
     url = str(r.get("url") or URL_FIJA)
     sha = str(r.get("sha256") or "")
 

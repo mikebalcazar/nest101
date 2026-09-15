@@ -380,6 +380,42 @@ except GeometriaInvalida as ex:
     chk("imposible" in str(ex), "la red de seguridad atrapa piezas con medida <= 0")
 
 
+# ------------------------------------------------------- #094 nombre bajado
+#
+# El nombre del instalador lo publica el flujo en el JSON. Si la app lo guarda
+# con un nombre y lo busca con otro, se vuelve a bajar 120 MB en cada arranque
+# sin que nadie entienda por qué. Y como ese nombre viene de un archivo de
+# fuera, tampoco puede servir para escribir donde no debe.
+print("\n== #094 NOMBRE DEL INSTALADOR ==")
+from core import actualizar as _ACT                                # noqa: E402
+
+def _nom(archivo=None, url="", version="1.0.0"):
+    win = {}
+    if archivo is not None:
+        win["archivo"] = archivo
+    if url:
+        win["url"] = url
+    return _ACT.leer_estado({"nest101": {"version": version, "windows": win}})["archivo"]
+
+chk(_nom("nest101-0.16.0-setup.exe") == "nest101-0.16.0-setup.exe",
+    "se usa el nombre que publica el flujo")
+chk(_nom(None, "https://x/y/nest101-9.9.9-setup.exe", "9.9.9") == "nest101-9.9.9-setup.exe",
+    "si no viene, se saca del final de la URL")
+chk(_nom(None) == "nest101-1.0.0-setup.exe",
+    "sin nombre ni URL, se arma por convención")
+for feo, qué in [("../../../evil.exe", "«..» para salirse de la carpeta"),
+                 ("C:\\Windows\\System32\\mal.exe", "ruta absoluta de Windows"),
+                 ("/etc/passwd", "ruta absoluta de Linux"),
+                 ("otroprograma-setup.exe", "instalador de otro programa"),
+                 ("Diagnostico.bat", "algo que no es instalador")]:
+    chk(_nom(feo) == "nest101-1.0.0-setup.exe", f"se rechaza: {qué}")
+
+_ruta = _ACT.destino_de("0.16.0", "nest101-0.16.0-setup.exe")
+chk(_ruta.endswith("nest101-0.16.0-setup.exe"), "el archivo se guarda con ese nombre")
+chk("descargas" in _ruta, "y dentro de la carpeta de descargas del taller")
+chk(_ACT.destino_de("0.16.0", "../fuera.exe") == _ACT.destino_de("0.16.0"),
+    "un nombre torcido cae en el de siempre, nunca fuera de la carpeta")
+
 # El veredicto va AL FINAL y con código de salida.
 #
 # Estaba a la mitad del archivo y sin `sys.exit`: contaba sólo lo que había
