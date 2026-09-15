@@ -354,6 +354,7 @@ function cablear() {
   $("bAddMat").onclick = agregarMaterial;
   $("bAddPuerta").onclick = () => addFrente("puerta");
   $("bAddCajon").onclick = () => addFrente("cajon");
+  $("bAddNicho").onclick = () => addFrente("abierto");        // #090
   $("mCancel").onclick = () => $("modal").classList.remove("on");
 
   // #018 — pantalla de inicio
@@ -760,11 +761,12 @@ function pintarFrentes() {
     <div class="frente" data-i="${i}">
       <div><div class="lbl">Tipo</div>
         <select data-c="tipo"><option value="puerta"${f.tipo === "puerta" ? " selected" : ""}>Puerta</option>
-        <option value="cajon"${f.tipo === "cajon" ? " selected" : ""}>Cajón</option></select></div>
+        <option value="cajon"${f.tipo === "cajon" ? " selected" : ""}>Cajón</option>
+        <option value="abierto"${f.tipo === "abierto" ? " selected" : ""}>Abierto (nicho)</option></select></div>
       <div><div class="lbl">Alto (vacío = reparte)</div>
         <input type="number" data-c="alto" value="${f.alto ?? ""}" placeholder="auto"></div>
       <div><div class="lbl">Hojas</div>
-        <input type="number" data-c="n" min="1" value="${f.n}" ${f.tipo === "cajon" ? "disabled" : ""}></div>
+        <input type="number" data-c="n" min="1" value="${f.n}" ${f.tipo !== "puerta" ? "disabled" : ""}></div>
       <button class="del" data-d="${i}">×</button>
     </div>`).join("") || `<div style="color:var(--txt3);font-size:11.5px">Sin frentes (mueble abierto)</div>`;
   $("listaFrentes").querySelectorAll(".frente").forEach((el) => {
@@ -774,7 +776,7 @@ function pintarFrentes() {
         const c = inp.dataset.c;
         if (c === "alto") g.frentes[i].alto = inp.value === "" ? null : num(inp.value);
         else if (c === "n") g.frentes[i].n = Math.max(1, num(inp.value, 1));
-        else { g.frentes[i].tipo = inp.value; if (inp.value === "cajon") g.frentes[i].n = 1; pintarFrentes(); }
+        else { g.frentes[i].tipo = inp.value; if (inp.value !== "puerta") g.frentes[i].n = 1; pintarFrentes(); }
         recalcular();
       }));
     el.querySelector("[data-d]").onclick = () => { g.frentes.splice(i, 1); pintarFrentes(); recalcular(); };
@@ -783,7 +785,7 @@ function pintarFrentes() {
 
 function addFrente(tipo) {
   const g = S.proyecto.gabinetes[S.sel];
-  g.frentes.push({ tipo, alto: tipo === "cajon" ? 180 : null, n: 1 });
+  g.frentes.push({ tipo, alto: tipo === "cajon" ? 180 : null, n: 1 });   // #090
   pintarFrentes(); recalcular();
 }
 
@@ -1446,26 +1448,35 @@ let tmr = null;
 function recalcular(marcar = true) {
   if (marcar) marcarSucio();          // #015
   clearTimeout(tmr);
-  tmr = setTimeout(hacerCalculo, 180);
+  tmr = setTimeout(hacerCalculo, 120);   // #088: antes 180
 }
+let turnoCalculo = 0;                     // #088: sólo cuenta la respuesta más nueva
 
 async function hacerCalculo() {
   if (!S.proyecto.gabinetes.length) {
     S.ultimo = null; pintarResultados(null); construir3D([]); return;
   }
   estado("calculando…");
+  const turno = ++turnoCalculo;
   try {
     const cuerpo = { method: "POST", headers: { "Content-Type": "application/json" },
                      body: JSON.stringify(S.proyecto) };
-    const [r, s] = await Promise.all([
-      api("/api/calcular", cuerpo), api("/api/solidos", cuerpo)]);
-    S.ultimo = r;
+    // #088 — el 3D (rápido) se dibuja en cuanto llega, sin esperar la lista de
+    // corte (lenta: acomoda piezas en hojas). Ambas se piden a la vez.
+    const pCalc = api("/api/calcular", cuerpo);
+    pCalc.catch(() => {});                  // su error se atiende abajo
+    const s = await api("/api/solidos", cuerpo);
+    if (turno !== turnoCalculo) return;     // ya hay un cálculo más nuevo en camino
     S.cubiertas3d = s.cubiertas || [];        // #028
-    pintarResultados(r);
     construir3D(s.gabinetes);
+    const r = await pCalc;
+    if (turno !== turnoCalculo) return;
+    S.ultimo = r;
+    pintarResultados(r);
     problema(null);
     estado("listo");
   } catch (e) {
+    if (turno !== turnoCalculo) return;     // un error viejo no tapa un resultado nuevo
     if (e.medidas) {                     // #014
       problema(e.message);
       estado("medidas por corregir", true);
@@ -1578,15 +1589,52 @@ function init3D() {
 
   grupo3D = new THREE.Group();
   escena.add(grupo3D);
-  controles = orbita(cv, camara, () => {});
+  controles = orbita(cv, camara, () => pedir3D());
   resize3D();
   cablear3D();
+  vigilarCambios3D();
+  // #088 — antes se dibujaba 60 veces por segundo aunque nada se moviera. Ahora
+  // el bucle sólo pregunta «¿cambió algo?» (cuesta casi nada) y dibuja si sí:
+  // se movió la cámara, o alguien pidió un cuadro con pedir3D().
+  const camPos = new THREE.Vector3(NaN), camRot = new THREE.Quaternion(NaN), camProy = new THREE.Matrix4();
   (function loop() {
     raf = requestAnimationFrame(loop);
+    const movio = !camara.position.equals(camPos) || !camara.quaternion.equals(camRot) ||
+                  !camara.projectionMatrix.equals(camProy);
+    if (!movio && pedidos3D <= 0) return;
+    if (pedidos3D > 0) pedidos3D--;
+    camPos.copy(camara.position); camRot.copy(camara.quaternion); camProy.copy(camara.projectionMatrix);
     actualizarEtiquetasCota();
     render3.render(escena, camara);
   })();
 }
+
+/* #088 — cuántos cuadros faltan por dibujar. Se piden unos cuantos (no uno)
+   para cubrir cambios que terminan de aplicarse en el cuadro siguiente. */
+let pedidos3D = 2;
+function pedir3D(n = 2) { pedidos3D = Math.max(pedidos3D, n); }
+
+/* Red de seguridad: casi todo lo que cambia la escena viene de algo que hizo
+   la persona (clic, tecla, rueda, arrastre) o de un recálculo, que ya pide su
+   cuadro. Así ningún cambio se queda sin dibujar aunque alguna función olvide
+   pedirlo. Escuchar estos eventos no cuesta nada: sólo cambia un número. */
+function vigilarCambios3D() {
+  const unos = () => pedir3D(6);
+  for (const ev of ["pointerdown", "pointerup", "click", "wheel", "keydown", "keyup", "input", "change"])
+    document.addEventListener(ev, unos, { capture: true, passive: true });
+  document.addEventListener("pointermove", (e) => { if (e.buttons) pedir3D(2); },
+                            { capture: true, passive: true });
+  addEventListener("focus", unos);
+  document.addEventListener("visibilitychange", unos);
+  // el tamaño del recuadro de cotas se guarda aquí: leerlo en cada cuadro
+  // obligaba al navegador a recalcular toda la página a media tarea
+  const cap = $("cotas3d");
+  if (cap && typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(([e]) => { tamCotas.w = e.contentRect.width; tamCotas.h = e.contentRect.height; pedir3D(); })
+      .observe(cap);
+  }
+}
+const tamCotas = { w: 0, h: 0 };
 
 function resize3D() {
   const c = $("centro");
@@ -1595,6 +1643,7 @@ function resize3D() {
   render3.setSize(w, h, false);
   camara.aspect = w / Math.max(h, 1);
   camara.updateProjectionMatrix();
+  pedir3D();
 }
 
 /* offset que compensa el giro para que la huella quede en el cuadrante positivo (#004) */
@@ -1705,6 +1754,7 @@ function construir3D(gabs) {
   const firma = gabs.map((g) => g.nombre + g.bbox.join("x")).join("|");
   if (firma !== S.firma3D) { S.firma3D = firma; encuadrar(); }
   resaltar3D();
+  pedir3D();
 }
 
 /* #028 — la cubierta no cuelga de ningún mueble: es un tramo de la cocina, así
@@ -1826,6 +1876,7 @@ function aplicarExplosion() {
   };
   grupo3D.traverse(mover);
   if (grupoCub) grupoCub.traverse(mover);      // #064
+  pedir3D();
 }
 
 function resaltar3D() {
@@ -2236,7 +2287,7 @@ function pintarCotas() {
   ).join("");
   cap.querySelectorAll(".cota").forEach((el) =>
     el.onclick = (e) => { e.stopPropagation(); editarCota(+el.dataset.c, el); });
-  actualizarEtiquetasCota();
+  pedir3D();     // #088 — las etiquetas se colocan en el próximo cuadro, antes de verse
 }
 const cm = (mm) => (mm / 10).toFixed(1).replace(/\.0$/, "") + " cm";
 
@@ -2306,7 +2357,9 @@ function aplicarCota(c, mm) {
 function actualizarEtiquetasCota() {
   if (!S.cotasGeo) return;
   const cap = $("cotas3d");
-  const w = cap.clientWidth, hh = cap.clientHeight;
+  // #088 — el tamaño viene del ResizeObserver; sólo si no hay, se mide
+  if (!tamCotas.w) { tamCotas.w = cap.clientWidth; tamCotas.h = cap.clientHeight; }
+  const w = tamCotas.w, hh = tamCotas.h;
   const etiquetas = cap.children;
   S.cotasGeo.forEach((c, i) => {
     const el = etiquetas[i];
@@ -2315,9 +2368,9 @@ function actualizarEtiquetasCota() {
                                 (c.a[2] + c.b[2]) / 2).project(camara);
     if (p.z > 1) { el.style.display = "none"; return; }
     el.style.display = "block";
-    // #022 — mientras se edita NO se reescribe: el bucle de render corre 60
-    // veces por segundo y borraría el campo en cuanto aparece.
-    if (!el.classList.contains("editando")) el.textContent = c.t;
+    // #022 — mientras se edita NO se reescribe: borraría el campo en cuanto
+    // aparece. #088: y sólo se escribe si el texto cambió.
+    if (!el.classList.contains("editando") && el.textContent !== c.t) el.textContent = c.t;
     el.style.left = ((p.x * 0.5 + 0.5) * w) + "px";
     el.style.top = ((-p.y * 0.5 + 0.5) * hh) + "px";
   });
@@ -2940,47 +2993,14 @@ async function revisarActualizacion(forzar = false) {
   pintarActualizacion();
 }
 
-/* #093 — el reloj que sigue la descarga.
-
-   Uno solo, y se apaga en cuanto deja de haber algo que mirar. Un intervalo
-   huérfano preguntando cada dos segundos durante una jornada entera es una
-   fuga que nadie ve hasta que la máquina va lenta. */
-let relojBajada = null;
-
-function seguirDescarga() {
-  if (relojBajada) return;
-  relojBajada = setInterval(async () => {
-    let d = null;
-    try { d = await api("/api/actualizacion/descarga"); } catch { /* sin red, se calla */ }
-    if (!d) return;
-    if (S.actualizacion) S.actualizacion.descarga = d;
-    pintarActualizacion();
-    // Si la caja de Configuración está abierta, su renglón también se mueve.
-    const n = $("cActNota");
-    if (n && S.actualizacion) n.innerHTML = lineaAct(S.actualizacion);
-    if (d.estado !== "bajando") { clearInterval(relojBajada); relojBajada = null; }
-  }, 2000);
-}
-
 function pintarActualizacion() {
   const a = S.actualizacion;
   const b = $("bActualizar");
   if (!b) return;
   b.hidden = !(a && a.hay);
-  if (!a || !a.hay) return;
-  const d = a.descarga || {};
-  b.title = (a.notas || "") + (a.fecha ? `  ·  ${a.fecha}` : "");
-  if (d.estado === "bajando") {
-    // El botón ES la barra de progreso: un 47 % en el mismo sitio donde antes
-    // decía «Actualizar» se entiende sin explicar nada.
-    b.textContent = T2("Bajando la %s", a.version) + ` ${d.porcentaje || 0}%`;
-    b.onclick = () => abrirConfig();
-    seguirDescarga();
-  } else if (d.estado === "lista" && d.archivo && d.version === a.version) {
-    b.textContent = T2("Instalar la %s", a.version);
-    b.onclick = () => instalarAhora(d.archivo, a.version);
-  } else {
+  if (a && a.hay) {
     b.textContent = T2("Actualizar a %s", a.version);
+    b.title = (a.notas || "") + (a.fecha ? `  ·  ${a.fecha}` : "");
     b.onclick = () => abrirConfig();
   }
 }
@@ -2988,17 +3008,6 @@ function pintarActualizacion() {
 /** #092 — El instalador ya está bajado y comprobado: se ofrece correrlo.
     Se pregunta SIEMPRE antes: correr un instalador cierra el programa, y
     hacerlo sin avisar a media exportación sería imperdonable. */
-/** #093 — el renglón de estado, que ahora también cuenta la descarga. */
-function lineaDescarga(d) {
-  d = d || {};
-  if (d.estado === "bajando") {
-    return ` · <span data-sin-traducir>${d.porcentaje || 0}%</span> bajado`;
-  }
-  if (d.estado === "lista" && d.archivo) return " · ya bajada, lista para instalar";
-  if (d.estado === "error") return " · no se pudo bajar";
-  return "";
-}
-
 function instalarAhora(archivo, version) {
   modal(T2("Actualizar a %s", version),
     `<div class="aviso">El instalador ya está bajado y su huella cuadra.</div>
@@ -3009,14 +3018,14 @@ function instalarAhora(archivo, version) {
      <div style="font-size:11px;color:var(--txt3);margin-top:8px" data-sin-traducir>
        ${esc(archivo)}</div>`,
     () => {
-      if (window.despz?.instalar) window.despz.instalar(archivo);
+      if (window.t101?.instalar) window.t101.instalar(archivo);
       else abrirEnlace("file:///" + archivo);
     }, "Instalar ahora", () => {}, "Ahora no");
 }
 
 /** Abre el enlace en el navegador del equipo, no dentro de la app. */
 function abrirEnlace(url) {
-  if (window.despz?.abrirEnlace) { window.despz.abrirEnlace(url); return; }
+  if (window.t101?.abrirEnlace) { window.t101.abrirEnlace(url); return; }
   window.open(url, "_blank", "noopener");     // en navegador, durante el desarrollo
 }
 
@@ -3042,8 +3051,7 @@ function lineaAct(d) {
   d = d || {};
   if (d.hay) {
     return `<b style="color:var(--acc)">Hay versión nueva</b>` +
-           ` <b style="color:var(--acc)" data-sin-traducir>${esc(d.version || "")}</b>` +
-           lineaDescarga(d.descarga);
+           ` <b style="color:var(--acc)" data-sin-traducir>${esc(d.version || "")}</b>`;
   }
   if (d.error) return "No se pudo revisar (sin internet)";
   const ver = d.instalada || "";
@@ -3083,16 +3091,12 @@ async function abrirConfig() {
       <button class="${a.hay ? "pri" : "gh"}" id="cActBajar">Descargar la última versión</button>
       ${a.hay ? `<button class="gh" id="cActIgnorar">Ignorar esta versión</button>` : ""}
     </div>
-    <label style="display:flex;gap:7px;align-items:center;font-size:12px;margin:0 0 6px">
+    <label style="display:flex;gap:7px;align-items:center;font-size:12px;margin:0 0 8px">
       <input type="checkbox" id="cActAuto"${a.apagada ? "" : " checked"}>
       Revisar al arrancar y una vez al día</label>
-    <label style="display:flex;gap:7px;align-items:center;font-size:12px;margin:0 0 8px">
-      <input type="checkbox" id="cActBajarSola"${a.descargar_solo === false ? "" : " checked"}>
-      Y si hay una nueva, bajarla sola</label>
     <div style="font-size:11px;color:var(--txt3);margin:-8px 0 12px">
-      Bajar no es instalar: el instalador queda guardado y tú decides cuándo
-      correrlo. Se instala encima de la que tienes; tus proyectos y tu carpeta
-      de taller no se tocan.</div>
+      Se abre en tu navegador y se instala encima de la que tienes. Tus proyectos
+      y tu carpeta de taller no se tocan.</div>
     ${a.hay && a.notas ? `<div style="font-size:11px;color:var(--txt2);margin:-6px 0 12px">
       <div style="color:var(--txt3);margin-bottom:3px">Qué trae</div>
       <div data-sin-traducir style="white-space:pre-wrap;max-height:120px;overflow:auto;
@@ -3141,37 +3145,17 @@ async function abrirConfig() {
       await revisarActualizacion();
       estado(T2("la %s deja de avisar; las siguientes sí", a.version));
     };
-    // #093 — el interruptor de bajarla sola.
-    const sola = $("cActBajarSola");
-    if (sola) sola.onchange = () => api("/api/actualizacion/auto", {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ descargar: sola.checked }),
-    }).then(() => estado(sola.checked ? "la nueva se bajará sola"
-                                      : "la nueva ya no se baja sola"))
-      .catch(() => estado("no se pudo guardar", true));
-
-    // #092 · #093 — bajar, comprobar la huella y ofrecer instalar. La descarga
-    // ya no bloquea: esto sólo da la orden y el reloj sigue el avance. Si el
-    // instalador ya está en disco, no se vuelve a bajar: se ofrece instalarlo.
-    // El navegador sigue siendo la salida si algo falla: nunca se queda sin
-    // manera de bajarlo.
+    // #092 — bajar, comprobar la huella y ofrecer instalar. El navegador sigue
+    // siendo la salida si algo falla: nunca se queda sin manera de bajarlo.
     if (bajar) bajar.onclick = async () => {
       if (!a.hay) { abrirEnlace(a.url || ""); return; }
-      const d0 = (S.actualizacion || {}).descarga || {};
-      if (d0.estado === "lista" && d0.archivo && d0.version === a.version) {
-        $("modal").classList.remove("on");
-        instalarAhora(d0.archivo, a.version);
-        return;
-      }
       const n = $("cActNota");
+      if (n) n.textContent = "Bajando el instalador… (unos 180 MB)";
       bajar.disabled = true;
       try {
         const r = await api("/api/actualizacion/descargar", { method: "POST" });
-        if (S.actualizacion) S.actualizacion.descarga = r;
-        if (n) n.innerHTML = lineaAct(S.actualizacion || {});
-        seguirDescarga();
-        pintarActualizacion();
-        estado("bajando el instalador… (unos 180 MB)");
+        $("modal").classList.remove("on");
+        instalarAhora(r.archivo, r.version);
       } catch (e) {
         if (n) n.textContent = "No se pudo bajar. Se abre en el navegador.";
         abrirEnlace(a.url || "");

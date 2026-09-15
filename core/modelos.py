@@ -16,7 +16,7 @@ LARGOS_CORREDERA = [250, 300, 350, 400, 450, 500, 550, 600]
 @dataclass
 class Frente:
     """Elemento del frente del gabinete."""
-    tipo: str            # "puerta" | "cajon"
+    tipo: str            # "puerta" | "cajon" | "abierto"  (#090)
     alto: Optional[float] = None   # None = reparte el sobrante
     n: int = 1           # nº de hojas (solo puertas)
 
@@ -114,6 +114,10 @@ def validar(g: Gabinete, std: Estandar):
     if g.n_entrepanos and g.n_entrepanos < 0:
         raise GeometriaInvalida(f"«{n}»: los entrepaños no pueden ser negativos.")
     for f in g.frentes:
+        if f.tipo not in ("puerta", "cajon", "abierto"):       # #090
+            raise GeometriaInvalida(
+                f"«{n}»: «{f.tipo}» no es un tipo de frente. "
+                "Sólo hay puerta, cajón y abierto.")
         if f.tipo == "puerta" and f.n < 1:
             raise GeometriaInvalida(f"«{n}»: una puerta necesita al menos una hoja.")
 
@@ -529,6 +533,73 @@ def alturas_entrepanos(g: Gabinete, std: Estandar, hc: Optional[float] = None) -
     return [round(h, 1) for h in hs]
 
 
+def entrepanos_divisorios(g: Gabinete, std: Estandar,
+                          hc: Optional[float] = None) -> List[Dict]:
+    """#089 — Entrepaños que separan un cajón de una puerta.
+
+    Petición de Mike (14-sep). Donde un módulo de cajón y uno de puerta quedan
+    pegados, el hueco necesita un panel que los divida: sin él, el cajón abre
+    contra el espacio de la puerta y no hay dónde fijar la corredera.
+
+    Dos decisiones suyas, y las dos cambian dónde cae el panel:
+
+    - **Fijo, ensamblado al costado.** No es regulable: va atornillado a su
+      altura, como el piso, porque encima se apoya la corredera de un cajón y
+      un entrepaño de clavijas se zafa.
+    - **Siempre del lado de la puerta, tapado por ella.** El panel se mete
+      DENTRO del alto de la puerta, nunca en la junta entre frentes, así que
+      desde afuera no se ve: la puerta lo cubre. Con la puerta arriba, el panel
+      cuelga hacia arriba desde la junta; con la puerta abajo, baja desde la
+      junta. En los dos casos el borde que mira al cajón coincide con la junta.
+
+    #090 — Los nichos abiertos también se cierran. Un módulo `abierto` pegado a
+    un cajón o a una puerta lleva su panel, y así un nicho entre dos cajones
+    queda con uno arriba y otro abajo, que es lo que lo vuelve utilizable. Ahí
+    no hay puerta que tape nada, y la regla de Mike es que **el panel se mete
+    en el módulo vecino, no en el nicho**: el hueco conserva el alto que se ve
+    en pantalla en vez de perder un espesor por lado. Dos módulos abiertos
+    seguidos son el mismo nicho y no llevan nada en medio.
+
+    Devuelve, de abajo hacia arriba, un dict por panel:
+      h    — altura de su cara inferior desde la cara superior del piso, que es
+             como se mide en el taller y como ya se miden los otros entrepaños
+      ent  — "i/j": entre qué dos módulos va, contados desde arriba
+      modo — "puerta" si lo tapa una puerta, "nicho" si cierra un hueco abierto
+
+    Se pone solo y no se puede apagar. Los muebles que sólo traen puertas, o
+    sólo cajones, no llevan ninguno.
+    """
+    if len(g.frentes) < 2:
+        return []
+    e = std.mat_cuerpo.espesor
+    if hc is None:
+        hc = alturas(g, std)[1]
+    mods = _repartir_frentes(g, hc, std)
+    piso_arriba = hc - e            # cara superior del piso, medida desde arriba
+    res = []
+    for i in range(len(mods) - 1):
+        arriba, abajo = mods[i]["frente"].tipo, mods[i + 1]["frente"].tipo
+        par = {arriba, abajo}
+        if "abierto" in par:
+            if par == {"abierto"}:
+                continue            # dos abiertos seguidos: es el mismo nicho
+            # #090 — el panel se hunde en el vecino cerrado, no en el nicho
+            anfitrion_arriba = abajo == "abierto"
+            modo = "nicho"
+        elif par == {"puerta", "cajon"}:
+            anfitrion_arriba = arriba == "puerta"   # se hunde en la puerta
+            modo = "puerta"
+        else:
+            continue                # puerta con puerta o cajón con cajón: nada
+        y_junta = mods[i + 1]["y_mod"]          # la junta, medida desde arriba
+        # si el anfitrión está abajo, el panel baja un espesor desde la junta
+        y_cara_inf = y_junta if anfitrion_arriba else y_junta + e
+        h = round(piso_arriba - y_cara_inf, 1)
+        if 0 < h < piso_arriba - e:             # no pegado al piso ni a la tapa
+            res.append({"h": h, "ent": f"{i + 1}/{i + 2}", "modo": modo})
+    return sorted(res, key=lambda d: d["h"])
+
+
 def respaldo_interior(std: Estandar) -> bool:
     """#003: los respaldos gruesos van encajonados, no ranurados."""
     return std.mat_respaldo.espesor >= std.respaldo_interior_desde
@@ -589,6 +660,12 @@ def despiezar(g: Gabinete, std: Estandar, pref: str = "1") -> List[Pieza]:
             for y in (std.offset_linea_frente, pc - std.offset_linea_trasera):
                 cos.barrenos.append(Barreno(h + e / 2, y, std.dia_minifix_costado, 12,
                                             nota=f"ens-entrepano-{i}"))
+    # #089 — los divisorios van ensamblados, como los entrepaños fijos
+    for k, d in enumerate(entrepanos_divisorios(g, std, hc), start=1):
+        for y in (std.offset_linea_frente, pc - std.offset_linea_trasera):
+            cos.barrenos.append(Barreno(d["h"] + e / 2, y, std.dia_minifix_costado, 12,
+                                        nota=f"ens-divisorio-{k}"))
+
     # línea 32 para entrepaños regulables
     if g.n_entrepanos and not g.entrepanos_fijos:
         x0 = 96.0
@@ -686,6 +763,19 @@ def despiezar(g: Gabinete, std: Estandar, pref: str = "1") -> List[Pieza]:
                             + " · alturas " + ", ".join(
                                 f"{h:.0f}" for h in alturas_entrepanos(g, std, hc))))
 
+    # ---------------- ENTREPAÑOS DIVISORIOS ----------------  #089
+    divs = entrepanos_divisorios(g, std, hc)
+    if divs:
+        p_div = round(prof_util - (er if ranurado else 0), 1)
+        P.append(Pieza(f"{pref}-DIV", "Entrepaño divisorio", largo=ancho_int,
+                       ancho=p_div, espesor=e, material=mc, cantidad=len(divs),
+                       canto=_canto_visible(std, 0), mueble=g.nombre,
+                       nota="fijo, ensamblado · el de puerta queda tapado por "
+                            "ella; el de nicho se mete en el módulo vecino · "
+                            "alturas "
+                            + ", ".join(f"{d['h']:.0f} ({d['ent']}, {d['modo']})"
+                                        for d in divs)))
+
     # ---------------- FRENTES ----------------
     # #042 #045 — el manguete del uñero: la faja fija de arriba contra la que se
     # jala. Es una pieza más, no un adorno: se corta, se cantea y hay que
@@ -716,6 +806,8 @@ def despiezar(g: Gabinete, std: Estandar, pref: str = "1") -> List[Pieza]:
     ic = 0
     for i, m in enumerate(mods):
         f: Frente = m["frente"]
+        if f.tipo == "abierto":       # #090 — nicho: no se corta ningún frente
+            continue
         if f.tipo == "puerta":
             aw = _ancho_hojas(g, f.n, std)
             pz = Pieza(f"{pref}-PTA{i+1}", f"Puerta ({f.n} hoja{'s' if f.n>1 else ''})",
