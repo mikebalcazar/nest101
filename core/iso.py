@@ -11,6 +11,7 @@ from typing import List, Tuple
 from .config import Estandar
 from .modelos import (Gabinete, _repartir_frentes, _ancho_hojas, LARGOS_CORREDERA,
                       alturas, alturas_entrepanos, doblado_nariz,
+                      entrepanos_divisorios, respaldo_interior,
                       holgura_frente, respaldo_entero, respaldo_interior,
                       unero_de, vuelo_de)
 
@@ -224,6 +225,13 @@ def solidos_gabinete(g: Gabinete, std: Estandar) -> List[Solido]:
                             "ENT", "entrepano", f"Entrepaño {i}",
                             ref_tipo="entrepano", ref_i=i - 1))
 
+    # #089 — entrepaños divisorios: van ensamblados entre costado y costado, así
+    # que miden el interior completo, no el ancho holgado del entrepaño suelto.
+    for i, d in enumerate(entrepanos_divisorios(g, std, hc), start=1):
+        S.append(Solido(e, y0, z0 + e + d["h"], A - 2 * e,
+                        Pc - (er if respaldo_interior(std) else 0), e,
+                        "DIV", "entrepano", f"Entrepaño divisorio {i}"))
+
     # frentes (se listan de arriba hacia abajo)
     hp, hef = std.holgura_perimetral, std.holgura_entre_frentes
 
@@ -251,6 +259,8 @@ def solidos_gabinete(g: Gabinete, std: Estandar) -> List[Solido]:
         zf = z_bot + (m["alto_mod"] - h_f) / 2
         # #058 — el chaflán del uñero sólo lo lleva el frente de hasta arriba
         chaf = "sup" if (i == 0 and hman > 0) else ""
+        if f.tipo == "abierto":       # #090 — nicho: no se dibuja ningún frente
+            continue
         if f.tipo == "puerta":
             aw = _ancho_hojas(g, f.n, std)
             for k in range(f.n):
