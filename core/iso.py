@@ -30,6 +30,7 @@ EXPLOSION = {
     "frente":      (0, -1.5, 0),
     "zoclo":       (0, -2.2, -0.2),
     "cajon":       (0, -0.85, 0),
+    "cajon_fondo": (0, -0.85, -0.45),                # #096
     "manguete":    (0, -1.2, 0.25),                  # #067
 }
 
@@ -115,6 +116,7 @@ ROL_MATERIAL = {
     "manguete": "mat_manguete",                      # #067
 
     "cajon": "mat_cajon",
+    "cajon_fondo": "mat_fondo_cajon",                # #096
 }
 
 
@@ -275,13 +277,55 @@ def solidos_gabinete(g: Gabinete, std: Estandar) -> List[Solido]:
             S.append(Solido(hp, yf, zf, A - 2 * hp, ef, h_f, f"FCJ{ic}", "frente",
                             f"Frente cajón {ic}", ref_tipo="frente", ref_i=i,
                             chaflan=chaf))
-            # caja del cajón (bloque simplificado)
-            ancho_caja = A - 2 * e - 2 * std.holgura_corredera_lado
+            # #096 — La caja del cajón, pieza por pieza.
+            #
+            # Antes era un solo bloque: se veía el bulto, pero no el cajón. No
+            # se distinguían los laterales del fondo, no se podía tocar una
+            # pieza para ver cuál es, y sobre todo no se veía si lo dibujado
+            # correspondía con lo que se manda a cortar. Ahora son las cinco
+            # piezas de `_piezas_caja_cajon()`, con SUS medidas, no con medidas
+            # parecidas: verificar.py compara las dos listas y truena si un
+            # milímetro no cuadra.
+            #
+            # Cómo se arma, que es lo que decide dónde va cada una:
+            #   · el fondo va SOBREPUESTO abajo (así lo dice su nota en corte),
+            #     y por eso mide el rectángulo completo de la caja: ancho_caja
+            #     por el largo de la corredera
+            #   · los dos laterales se paran ENCIMA del fondo, uno en cada
+            #     extremo, y corren todo el fondo de la caja
+            #   · el frente y la trasera entran ENTRE los laterales, y por eso
+            #     miden ancho_caja menos dos espesores
+            #
+            # El alto total de la caja es el espesor del fondo más el alto de
+            # los laterales; el bloque de antes se comía el espesor del fondo.
+            ancho_caja = round(A - 2 * e - 2 * std.holgura_corredera_lado, 1)
             util = Pc - std.retranqueo_fondo_cajon
-            lc = max([l for l in LARGOS_CORREDERA if l <= util], default=LARGOS_CORREDERA[0])
-            S.append(Solido(e + std.holgura_corredera_lado, y0 + 15,
-                            zf + 8, ancho_caja, lc, std.alto_caja_cajon,
-                            f"CJ{ic}", "cajon", f"Caja cajón {ic}"))
+            lc = float(max([l for l in LARGOS_CORREDERA if l <= util],
+                           default=LARGOS_CORREDERA[0]))
+            ec = std.mat_cajon.espesor                  # espesor de la caja
+            ef_c = std.mat_fondo_cajon.espesor          # espesor del fondo
+            h_caja = std.alto_caja_cajon
+            a_int = round(ancho_caja - 2 * ec, 1)       # entre laterales
+            x_caja = e + std.holgura_corredera_lado
+            y_caja = y0 + 15
+            z_caja = zf + 8
+
+            S.append(Solido(x_caja, y_caja, z_caja, ancho_caja, lc, ef_c,
+                            f"CJB{ic}", "cajon_fondo", f"Fondo caja cajón {ic}",
+                            ref_tipo="frente", ref_i=i))
+            z_lat = z_caja + ef_c
+            for lado, x_lat in (("izq", x_caja),
+                                ("der", x_caja + ancho_caja - ec)):
+                S.append(Solido(x_lat, y_caja, z_lat, ec, lc, h_caja,
+                                f"CJL{ic}", "cajon",
+                                f"Lateral {lado} caja cajón {ic}",
+                                ref_tipo="frente", ref_i=i))
+            for cual, y_pan in (("Frente", y_caja),
+                                ("Trasera", y_caja + lc - ec)):
+                S.append(Solido(x_caja + ec, y_pan, z_lat, a_int, ec, h_caja,
+                                f"CJF{ic}", "cajon",
+                                f"{cual} caja cajón {ic}",
+                                ref_tipo="frente", ref_i=i))
     return pintar_por_material(S, std)
 
 

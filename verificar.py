@@ -456,6 +456,70 @@ for _nom, _std in [("ranurado", _e6),
     chk(_fd(_std, 500.0, False) == 500.0 - _std.mat_respaldo.espesor,
         f"{_nom}: respaldo ranurado o sobrepuesto sí se resta")
 
+# ------------------------------------------- #096 el 3D contra la lista de corte
+#
+# Mike: «necesito que el 3D dibuje los cajones como se están computando, no un
+# cubo representativo, y confirmar que sea fiel a lo que se manda a corte».
+#
+# La caja del cajón ya no es un bloque: son sus cinco piezas. Esta comprobación
+# es la otra mitad de la petición, y vale más que mirar una captura: cada
+# sólido del 3D tiene que existir en la lista de corte con LAS MISMAS medidas.
+#
+# Se compara contra la medida TERMINADA, no contra la de corte. No es un
+# detalle: la lista dice 89 mm porque es lo que se corta, y la pieza mide 90 ya
+# con su canto de 1 mm pegado. El 3D enseña el mueble armado, así que le toca
+# la terminada. Comparar contra la de corte daría un error de un milímetro por
+# cada canto y sería la comprobación la que está mal.
+print("\n== #096 EL 3D CONTRA LA LISTA DE CORTE ==")
+from core.iso import solidos_gabinete as _sol                      # noqa: E402
+from core.modelos import Frente as _Fr, Gabinete as _Gb            # noqa: E402
+
+def _terminada(pz):
+    """Las tres medidas de la pieza ya armada, ordenadas para poder compararlas
+    sin depender de cómo se orientó en el mueble."""
+    largo = pz.largo_final if pz.largo_final is not None else pz.largo
+    ancho = pz.ancho_final if pz.ancho_final is not None else pz.ancho
+    return tuple(sorted((round(largo, 1), round(ancho, 1), round(pz.espesor, 1))))
+
+for _nom, _fr in [("3 cajones", [_Fr("cajon", alto=180.0) for _ in range(3)]),
+                  ("cajón y puerta", [_Fr("cajon", alto=180.0), _Fr("puerta")]),
+                  ("cajón, nicho, cajón", [_Fr("cajon", alto=180.0), _Fr("abierto"),
+                                           _Fr("cajon", alto=180.0)])]:
+    _g = _Gb(nombre="V", tipo="base", ancho=600.0, alto=880.0, prof=600.0, frentes=_fr)
+    _P = despiezar(_g, std)
+    _S = [x for x in _sol(_g, std) if x.grupo in ("cajon", "cajon_fondo")]
+
+    # cuántas piezas de caja de cajón hay en corte, contando las de cantidad 2
+    _de_caja = [q for q in _P if "caja cajón" in q.nombre]
+    _n_corte = sum(int(q.cantidad) for q in _de_caja)
+    chk(len(_S) == _n_corte,
+        f"{_nom}: el 3D dibuja {len(_S)} piezas de caja y la lista manda cortar {_n_corte}")
+
+    # y cada sólido tiene que existir en la lista con las mismas tres medidas
+    _medidas = {}
+    for q in _de_caja:
+        _medidas.setdefault(_terminada(q), []).append(q.nombre)
+    _malas = []
+    for _s in _S:
+        _tres = tuple(sorted((round(_s.dx, 1), round(_s.dy, 1), round(_s.dz, 1))))
+        if _tres not in _medidas:
+            _malas.append(f"{_s.etiqueta} {_tres}")
+    chk(not _malas,
+        f"{_nom}: cada pieza del 3D cuadra con una de corte"
+        + (f" — NO cuadran: {'; '.join(_malas)}" if _malas else ""))
+
+    # el material dibujado también tiene que ser el que se va a cortar
+    _mats3d = {x.material for x in _S}
+    _matsco = {q.material for q in _de_caja}
+    chk(_mats3d == _matsco,
+        f"{_nom}: mismos materiales en 3D y en corte ({', '.join(sorted(_mats3d))})")
+
+# Un mueble sin cajones no dibuja ninguna caja.
+_sin = _Gb(nombre="V", tipo="base", ancho=600.0, alto=880.0, prof=600.0,
+           frentes=[_Fr("puerta")])
+chk(not [x for x in _sol(_sin, std) if x.grupo in ("cajon", "cajon_fondo")],
+    "un mueble de pura puerta no dibuja cajas de cajón")
+
 # ----------------------------------------------- #095 librerías del instalador
 #
 # Las 0.16.0 y 0.16.1 se publicaron sin cuatro librerías: la receta del flujo

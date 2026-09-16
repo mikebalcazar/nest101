@@ -1563,6 +1563,7 @@ const GRUPOS_ES = {
   costado_izq: "Costados", costado_der: "Costados", piso: "Piso", tapa: "Tapa",
   travesano: "Travesaños", entrepano: "Entrepaños", respaldo: "Respaldo",
   frente: "Frentes", zoclo: "Zoclo", cajon: "Cajones",
+  cajon_fondo: "Fondos de cajón",                    // #096
 };
 
 function init3D() {
