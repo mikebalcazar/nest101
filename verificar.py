@@ -456,6 +456,38 @@ for _nom, _std in [("ranurado", _e6),
     chk(_fd(_std, 500.0, False) == 500.0 - _std.mat_respaldo.espesor,
         f"{_nom}: respaldo ranurado o sobrepuesto sí se resta")
 
+# ------------------------------------------------- #098 textos sin traducir
+#
+# La interfaz arranca en inglés por omisión, y el diccionario se busca por el
+# texto en español. Un texto nuevo sin entrada no truena: sale en español en
+# media pantalla en inglés, y nadie se entera hasta que un cliente lo ve. Pasó
+# con «Cajones» y «Fondos de cajón» en la leyenda del 3D.
+print("\n== #098 TEXTOS TRADUCIDOS ==")
+import json as _json                                              # noqa: E402
+from pathlib import Path as _Path                                 # noqa: E402
+
+_dic = _json.loads((_Path(__file__).parent / "assets" / "idioma" / "en.json")
+                   .read_text(encoding="utf-8"))
+from core.modelos import Frente as _Fr, Gabinete as _Gb            # noqa: E402
+for _txt in ["Entrepaño divisorio", "Abierto (nicho)", "+ Nicho", "Cajones",
+             "Fondos de cajón", "Caja", "Ver adentro",
+             "Lateral izq caja cajón #", "Frente caja cajón #",
+             "Trasera caja cajón #", "Fondo caja cajón #",
+             "Lateral caja cajón #", "Frente/trasera caja cajón #"]:
+    chk(bool(_dic.get(_txt)), f"«{_txt}» tiene traducción — {_dic.get(_txt, 'FALTA')}")
+
+# Los nombres que inventa el motor llevan número, y el diccionario los guarda
+# con «#» en su lugar. Si alguien cambia el nombre de una pieza y no toca el
+# diccionario, esto lo caza.
+_g98 = _Gb(nombre="V", tipo="base", ancho=600.0, alto=880.0, prof=600.0,
+           frentes=[_Fr("cajon", alto=180.0), _Fr("puerta")])
+import re as _re                                                  # noqa: E402
+for _pz in despiezar(_g98, std):
+    if "cajón" in _pz.nombre or "divisorio" in _pz.nombre:
+        _clave = _re.sub(r"\d+", "#", _pz.nombre).strip()
+        chk(bool(_dic.get(_clave)) or bool(_dic.get(_pz.nombre)),
+            f"la pieza «{_pz.nombre}» se puede traducir")
+
 # ------------------------------------- #097 alto de las paredes de la caja
 #
 # Mike: «la altura de las paredes del cajón debe ser por default del 80 % de la
@@ -467,7 +499,6 @@ for _nom, _std in [("ranurado", _e6),
 print("\n== #097 ALTO DE LA CAJA DEL CAJÓN ==")
 from core.iso import solidos_gabinete as _sol                      # noqa: E402
 from core.modelos import alto_caja_de as _aca                      # noqa: E402
-from core.modelos import Frente as _Fr, Gabinete as _Gb            # noqa: E402
 
 for _frente, _esperado, _porque in [
         (120.0, 100.0, "96 sube a 100"),

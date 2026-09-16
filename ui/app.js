@@ -10,6 +10,7 @@ const S = {
   ultimo: null,
   explosion: 0,
   aristas: true,
+  fantasma: leerFantasma(),   // #098 — el seleccionado se ve por dentro
   cotas: true,          // #002 #013
   mover: true,          // #004
   colorPor: "material", // #009: "material" | "rol"
@@ -35,6 +36,7 @@ const DEF = { catalogo: [], estandar: null };
 const CLAVE_REC = "despz.recuperacion";
 const CLAVE_RECIENTES = "despz.recientes";     // #018
 const CLAVE_TEMA = "despz.tema";               // #027
+const CLAVE_FANTASMA = "despz.fantasma";       // #098
 const MAX_RECIENTES = 8;
 const $ = (id) => document.getElementById(id);
 const api = async (ruta, opt) => {
@@ -70,6 +72,12 @@ const TEMAS = {
   claro:  { lienzo: 0xdfe3e9, rejilla1: 0xa8b2bf, rejilla2: 0xc6cdd6,
             arista: 0x6b7480, cota: 0x0071aa },
 };
+
+/* #098 — Se recuerda entre sesiones, como el tema: es una preferencia de cómo
+   te gusta mirar el modelo, no algo que quieras volver a encender cada vez. */
+function leerFantasma() {
+  try { return localStorage.getItem(CLAVE_FANTASMA) !== "0"; } catch { return true; }
+}
 
 function leerTema() {
   try { return localStorage.getItem(CLAVE_TEMA) === "claro" ? "claro" : "oscuro"; }
@@ -355,6 +363,13 @@ function cablear() {
   $("bAddPuerta").onclick = () => addFrente("puerta");
   $("bAddCajon").onclick = () => addFrente("cajon");
   $("bAddNicho").onclick = () => addFrente("abierto");        // #090
+  $("bFantasma").onclick = () => {                            // #098
+    S.fantasma = !S.fantasma;
+    $("bFantasma").classList.toggle("act", S.fantasma);
+    try { localStorage.setItem(CLAVE_FANTASMA, S.fantasma ? "1" : "0"); } catch {}
+    resaltar3D();
+  };
+  $("bFantasma").classList.toggle("act", S.fantasma);
   $("mCancel").onclick = () => $("modal").classList.remove("on");
 
   // #018 — pantalla de inicio
@@ -1916,13 +1931,38 @@ function aplicarExplosion() {
   pedir3D();
 }
 
+/* #098 — Quién se pone transparente.
+
+   Mike: «necesito que el mueble seleccionado sea el que tiene la transparencia,
+   no los demás como sucede ahorita. O poner un toggle de ghosted view».
+
+   Antes se atenuaban los OTROS, para señalar cuál estaba elegido. Se entiende
+   de dónde salió, pero está al revés de lo que uno quiere hacer: al seleccionar
+   un mueble es porque vas a trabajar en ÉL, y lo que necesitas es verle las
+   tripas —entrepaños, divisorios, las cajas de los cajones— sin sacarlo de la
+   cocina. Atenuar a los vecinos no enseña nada y ensucia el dibujo.
+
+   Ahora el transparente es el seleccionado, y los demás se quedan sólidos.
+   Con el botón «Ver adentro» apagado no hay transparencia ninguna.
+
+   depthWrite en false es lo que hace que de verdad se vea adentro: con él
+   encendido, la cara de enfrente tapa lo que hay detrás aunque sea
+   translúcida, y se ve una caja empañada en vez del interior. Las aristas se
+   dejan casi opacas: son las que sostienen la forma cuando el relleno se va. */
 function resaltar3D() {
-  const varios = grupo3D.children.length > 1;
   grupo3D.children.forEach((n) => {
-    const on = !varios || S.sel < 0 || n.userData.gi === S.sel;
+    const sel = S.sel >= 0 && n.userData.gi === S.sel;
+    const fantasma = S.fantasma && sel;
     n.traverse((m) => {
-      if (m.isMesh) { m.material.opacity = on ? 1 : 0.5; m.material.transparent = !on; }
-      if (m.isLineSegments) m.material.opacity = on ? 1 : 0.25, m.material.transparent = !on;
+      if (m.isMesh) {
+        m.material.opacity = fantasma ? 0.28 : 1;
+        m.material.transparent = fantasma;
+        m.material.depthWrite = !fantasma;
+      }
+      if (m.isLineSegments) {
+        m.material.opacity = fantasma ? 0.85 : 1;
+        m.material.transparent = fantasma;
+      }
     });
   });
   pintarCotas();
