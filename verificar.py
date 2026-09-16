@@ -456,6 +456,32 @@ for _nom, _std in [("ranurado", _e6),
     chk(_fd(_std, 500.0, False) == 500.0 - _std.mat_respaldo.espesor,
         f"{_nom}: respaldo ranurado o sobrepuesto sí se resta")
 
+# --------------------------------------------- #099 revisión de actualizaciones
+#
+# Mike: «cuando le doy check for updates me dice could not check (no internet)».
+# Había internet. El Python que viaja dentro del instalador no trae paquete de
+# certificados, y en Windows urllib no tiene con qué verificar el de GitHub.
+print("\n== #099 CONEXIÓN CON GITHUB ==")
+from core import actualizar as _ACT99                             # noqa: E402
+import ssl as _ssl99, urllib.error as _ue99                       # noqa: E402
+
+_ctx = _ACT99.contexto_ssl()
+chk(_ctx is not None, "hay contexto TLS para hablar con GitHub")
+chk(type(_ctx).__module__.startswith("truststore"),
+    f"usa el almacén de certificados del sistema — {type(_ctx).__module__}")
+chk(_ctx is _ACT99.contexto_ssl(), "el contexto se arma una vez y se reutiliza")
+
+# Y que el motivo del fallo se pueda leer: con sólo el nombre de la clase, un
+# certificado rechazado y un taller sin red se veían igual en pantalla.
+for _exc, _debe in [
+        (_ssl99.SSLCertVerificationError("x"), "certificado"),
+        (_ssl99.SSLError("x"), "conexión segura"),
+        (TimeoutError(), "a tiempo"),
+        (_ue99.HTTPError("u", 503, "boom", None, None), "503"),
+        (_ue99.URLError("sin ruta"), "no se llegó")]:
+    _m = _ACT99.motivo(_exc)
+    chk(_debe in _m, f"{type(_exc).__name__} se explica: «{_m}»")
+
 # ------------------------------------------------- #098 textos sin traducir
 #
 # La interfaz arranca en inglés por omisión, y el diccionario se busca por el
