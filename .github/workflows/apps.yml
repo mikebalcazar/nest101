@@ -80,7 +80,7 @@ jobs:
           # abajo. Si no, el corredor reutiliza el runtime viejo y la lista nueva
           # no se aplica nunca: así se publicaron la 0.16.0 y la 0.16.1 sin cuatro
           # librerías, y la app se quedaba clavada en la pantalla de arranque.
-          key: runtime-py-3.11.9-20240814-v2-libs-completas
+          key: runtime-py-3.11.9-20240814-v3-truststore
 
       - name: Armar el runtime de Python embebido
         if: steps.cache-runtime.outputs.cache-hit != 'true'
@@ -106,7 +106,8 @@ jobs:
           python -m pip download --dest whl --platform win_amd64 --only-binary=:all: \
             --python-version 3.11 --implementation cp \
             fastapi uvicorn ezdxf openpyxl reportlab==4.4.10 pillow numpy \
-            opencv-python-headless anthropic pypdfium2 python-multipart
+            opencv-python-headless anthropic pypdfium2 python-multipart \
+            truststore
           for w in whl/*.whl; do unzip -qo "$w" -d python/Lib/site-packages; done
           rm -rf python/Lib/site-packages/{pip,pip-*,setuptools,setuptools-*,pkg_resources,_distutils_hack}
           mkdir -p runtime && rm -rf runtime/python && mv python runtime/python

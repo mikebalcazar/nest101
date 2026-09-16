@@ -1803,7 +1803,24 @@ function construir3D(gabs) {
   aplicarExplosion();
   pintarLeyenda(usados);
   // sólo re-encuadra si cambió el conjunto de gabinetes, no en cada tecleo
-  const firma = gabs.map((g) => g.nombre + g.bbox.join("x")).join("|");
+  /* #099 — La cámara se reencuadra sólo cuando cambia QUÉ hay en la cocina, no
+     cuando cambia cuánto mide.
+
+     Mike: «cada que cambio una medida del gabinete en la cota del 3D, me
+     regresa a la vista inicial; quiero que mantenga la vista en la que estoy
+     viéndolo».
+
+     La firma llevaba el bbox —ancho, alto y fondo—, así que teclear un solo
+     milímetro la cambiaba y la cámara saltaba al encuadre general. Justo al
+     revés de lo que uno necesita: te acercas a una esquina para ver cómo queda
+     un chaflán, cambias la medida y pierdes el punto de vista que te costó
+     encontrar.
+
+     Ahora la firma son los nombres de los muebles: encuadra cuando agregas,
+     quitas o abres otro proyecto, y se queda quieta mientras editas. Para
+     volver al encuadre general está el botón «Encuadrar», que es donde uno lo
+     busca cuando lo quiere. */
+  const firma = gabs.map((g) => g.nombre).join("|");
   if (firma !== S.firma3D) { S.firma3D = firma; encuadrar(); }
   resaltar3D();
   pedir3D();

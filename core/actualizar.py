@@ -93,6 +93,66 @@ def mas_nueva(candidata: str, instalada: str) -> bool:
     return a + (0,) * (n - len(a)) > b + (0,) * (n - len(b))
 
 
+# #099 — Certificados: por qué «no hay internet» aunque haya internet.
+#
+# Mike: «cuando le doy check for updates me dice could not check (no internet)».
+#
+# Había internet. Lo que no hay es con qué comprobar que el certificado de
+# GitHub es de fiar. El Python que viaja dentro del instalador es un build
+# portable, y viene SIN paquete de certificados: no trae certifi ni un
+# cacert.pem. En Linux no se nota porque OpenSSL encuentra los del sistema; en
+# Windows no hay dónde buscar, y urllib truena con SSLCertVerificationError
+# antes de bajar un solo byte. Como todo el bloque estaba envuelto en un
+# `except Exception` que sólo decía «no se pudo», el programa lo contaba como
+# falta de red.
+#
+# La salida es `truststore`, que ya viaja dentro: usa el almacén de
+# certificados de Windows, el mismo que usa el navegador. Eso además hace que
+# funcione detrás del proxy de una empresa, donde el certificado lo firma la
+# propia empresa y un paquete traído de fuera nunca lo reconocería.
+#
+# Si por lo que sea no estuviera, se cae al comportamiento de siempre en vez de
+# quedarse sin revisar: peor es no revisar nunca.
+_CONTEXTO = None
+
+
+def contexto_ssl():
+    """El contexto TLS para hablar con GitHub, con los certificados de Windows."""
+    global _CONTEXTO
+    if _CONTEXTO is None:
+        import ssl
+        try:
+            import truststore
+            _CONTEXTO = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        except Exception:                                        # noqa: BLE001
+            _CONTEXTO = ssl.create_default_context()
+    return _CONTEXTO
+
+
+def motivo(e: Exception) -> str:
+    """Por qué falló, en una línea que se pueda leer sin ser programador.
+
+    Antes se guardaba sólo el nombre de la clase de la excepción, y por eso
+    esto tardó en encontrarse: en pantalla salía «no se pudo revisar» tanto si
+    el taller estaba sin red como si el problema era el certificado. Son cosas
+    distintas y se arreglan distinto.
+    """
+    import socket
+    import ssl as _ssl
+    import urllib.error
+    if isinstance(e, _ssl.SSLCertVerificationError):
+        return "no se pudo verificar el certificado de GitHub"
+    if isinstance(e, _ssl.SSLError):
+        return "falló la conexión segura con GitHub"
+    if isinstance(e, socket.timeout) or isinstance(e, TimeoutError):
+        return "GitHub no contestó a tiempo"
+    if isinstance(e, urllib.error.HTTPError):
+        return f"GitHub contestó {e.code}"
+    if isinstance(e, urllib.error.URLError):
+        return f"no se llegó a GitHub ({getattr(e, 'reason', '')})".strip()
+    return type(e).__name__
+
+
 def leer_estado(d) -> dict:
     """Saca lo que interesa del `<app>.json` publicado.
 
@@ -186,13 +246,14 @@ def revisar(instalada: str, forzar: bool = False) -> dict:
         pet = urllib.request.Request(
             URL_ESTADO, headers={"User-Agent": f"{APP}/{instalada}",
                                  "Cache-Control": "no-cache"})
-        with urllib.request.urlopen(pet, timeout=ESPERA) as r:
+        with urllib.request.urlopen(pet, timeout=ESPERA,
+                                    context=contexto_ssl()) as r:      # #099
             d = json.loads(r.read().decode("utf-8"))
         base.update(leer_estado(d))
         _CACHE.update({"cuando": ahora, "dato": dict(base)})
     except Exception as e:                                       # noqa: BLE001
         # Sin red no hay error que enseñar: hay un taller trabajando sin red.
-        base["error"] = f"{type(e).__name__}"
+        base["error"] = motivo(e)                                    # #099
         return base
 
     base["hay"] = bool(base["version"]) and mas_nueva(base["version"], instalada)
@@ -299,7 +360,8 @@ def descargar(url: str, sha256: str, destino: str, avisar=None) -> str:
     h = hashlib.sha256()
     leidos = 0
     pet = urllib.request.Request(url, headers={"User-Agent": f"{APP}"})
-    with urllib.request.urlopen(pet, timeout=60) as r, open(parcial, "wb") as f:
+    with urllib.request.urlopen(pet, timeout=60,
+                                context=contexto_ssl()) as r, open(parcial, "wb") as f:
         total = int(r.headers.get("Content-Length") or 0)
         while True:
             trozo = r.read(1024 * 256)
