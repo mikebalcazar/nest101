@@ -755,6 +755,33 @@ function ponerCandado(cual) {
   pintarAlturas(); recalcular();
 }
 
+/* #097 — Lo que va a salir si el campo se deja vacío: 80 % del alto del frente,
+   redondeado al centímetro de arriba. Es la misma cuenta que hace el motor en
+   alto_caja_de(); aquí sólo se enseña como sugerencia dentro del campo, para
+   que no haya que calcular nada de cabeza. Si el alto del frente es automático
+   todavía no se sabe, y se dice así. */
+function altoCajaAuto(f, i) {
+  // El alto de la hoja lo calcula el motor y ya viene en /api/solidos, que es
+  // lo único que sabe repartir el sobrante entre los frentes sin altura fija.
+  const alto = (S.solidos?.[S.sel]?.frentes || [])[i]?.alto ?? f.alto;
+  if (!alto) return "auto";
+  return String(Math.ceil(alto * 0.8 / 10) * 10);
+}
+
+/* #097 — El alto de la hoja lo calcula el motor, así que la sugerencia del
+   campo «Caja» no se sabe hasta que contesta. Se actualiza sólo el placeholder,
+   nunca se repinta el panel: repintarlo mientras alguien teclea le quitaría el
+   foco a media medida. */
+function refrescarSugerenciaCaja() {
+  const g = S.proyecto.gabinetes[S.sel];
+  if (!g) return;
+  document.querySelectorAll("#listaFrentes [data-c=altoCaja]").forEach((inp) => {
+    const i = +inp.closest(".frente").dataset.i;
+    const f = g.frentes[i];
+    if (f && f.tipo === "cajon") inp.placeholder = altoCajaAuto(f, i);
+  });
+}
+
 function pintarFrentes() {
   const g = S.proyecto.gabinetes[S.sel];
   $("listaFrentes").innerHTML = g.frentes.map((f, i) => `
@@ -767,6 +794,10 @@ function pintarFrentes() {
         <input type="number" data-c="alto" value="${f.alto ?? ""}" placeholder="auto"></div>
       <div><div class="lbl">Hojas</div>
         <input type="number" data-c="n" min="1" value="${f.n}" ${f.tipo !== "puerta" ? "disabled" : ""}></div>
+      <div title="Alto de las paredes de la caja. Vacío = 80% del alto del frente, redondeado al cm de arriba."><div class="lbl">Caja</div>
+        <input type="number" data-c="altoCaja" value="${f.alto_caja ?? ""}"
+               placeholder="${f.tipo === "cajon" ? altoCajaAuto(f, i) : "—"}"
+               ${f.tipo !== "cajon" ? "disabled" : ""}></div>
       <button class="del" data-d="${i}">×</button>
     </div>`).join("") || `<div style="color:var(--txt3);font-size:11.5px">Sin frentes (mueble abierto)</div>`;
   $("listaFrentes").querySelectorAll(".frente").forEach((el) => {
@@ -775,6 +806,9 @@ function pintarFrentes() {
       inp.addEventListener(inp.tagName === "SELECT" ? "change" : "input", () => {
         const c = inp.dataset.c;
         if (c === "alto") g.frentes[i].alto = inp.value === "" ? null : num(inp.value);
+        else if (c === "altoCaja") {                                   // #097
+          g.frentes[i].alto_caja = inp.value === "" ? null : num(inp.value);
+        }
         else if (c === "n") g.frentes[i].n = Math.max(1, num(inp.value, 1));
         else { g.frentes[i].tipo = inp.value; if (inp.value !== "puerta") g.frentes[i].n = 1; pintarFrentes(); }
         recalcular();
@@ -785,7 +819,8 @@ function pintarFrentes() {
 
 function addFrente(tipo) {
   const g = S.proyecto.gabinetes[S.sel];
-  g.frentes.push({ tipo, alto: tipo === "cajon" ? 180 : null, n: 1 });   // #090
+  g.frentes.push({ tipo, alto: tipo === "cajon" ? 180 : null, n: 1,
+                   alto_caja: null });                        // #090 #097
   pintarFrentes(); recalcular();
 }
 
@@ -1715,6 +1750,7 @@ function construir3D(gabs) {
     grupo3D.remove(o);
   }
   S.solidos = gabs;
+  refrescarSugerenciaCaja();          // #097
   const usados = new Set();
   gabs.forEach((g, gi) => {
     const nodo = new THREE.Group();

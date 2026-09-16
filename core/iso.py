@@ -11,7 +11,7 @@ from typing import List, Tuple
 from .config import Estandar
 from .modelos import (Gabinete, _repartir_frentes, _ancho_hojas, LARGOS_CORREDERA,
                       alturas, alturas_entrepanos, doblado_nariz,
-                      entrepanos_divisorios, respaldo_interior, fondo_divisorio,
+                      entrepanos_divisorios, respaldo_interior, alto_caja_de, fondo_divisorio,
                       holgura_frente, respaldo_entero, respaldo_interior,
                       unero_de, vuelo_de)
 
@@ -304,7 +304,7 @@ def solidos_gabinete(g: Gabinete, std: Estandar) -> List[Solido]:
                            default=LARGOS_CORREDERA[0]))
             ec = std.mat_cajon.espesor                  # espesor de la caja
             ef_c = std.mat_fondo_cajon.espesor          # espesor del fondo
-            h_caja = std.alto_caja_cajon
+            h_caja = alto_caja_de(h_f, f)            # #097
             a_int = round(ancho_caja - 2 * ec, 1)       # entre laterales
             x_caja = e + std.holgura_corredera_lado
             y_caja = y0 + 15
