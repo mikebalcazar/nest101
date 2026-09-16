@@ -11,7 +11,7 @@ from typing import List, Tuple
 from .config import Estandar
 from .modelos import (Gabinete, _repartir_frentes, _ancho_hojas, LARGOS_CORREDERA,
                       alturas, alturas_entrepanos, doblado_nariz,
-                      entrepanos_divisorios, respaldo_interior,
+                      entrepanos_divisorios, respaldo_interior, fondo_divisorio,
                       holgura_frente, respaldo_entero, respaldo_interior,
                       unero_de, vuelo_de)
 
@@ -228,8 +228,10 @@ def solidos_gabinete(g: Gabinete, std: Estandar) -> List[Solido]:
     # #089 — entrepaños divisorios: van ensamblados entre costado y costado, así
     # que miden el interior completo, no el ancho holgado del entrepaño suelto.
     for i, d in enumerate(entrepanos_divisorios(g, std, hc), start=1):
+        # #096 — el fondo sale de la MISMA función que usa el despiece: antes
+        # cada uno lo calculaba aparte y el dibujo no cuadraba con el corte.
         S.append(Solido(e, y0, z0 + e + d["h"], A - 2 * e,
-                        Pc - (er if respaldo_interior(std) else 0), e,
+                        fondo_divisorio(std, Pc - (er if interior else 0), interior), e,
                         "DIV", "entrepano", f"Entrepaño divisorio {i}"))
 
     # frentes (se listan de arriba hacia abajo)
