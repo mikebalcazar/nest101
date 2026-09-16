@@ -416,6 +416,46 @@ chk("descargas" in _ruta, "y dentro de la carpeta de descargas del taller")
 chk(_ACT.destino_de("0.16.0", "../fuera.exe") == _ACT.destino_de("0.16.0"),
     "un nombre torcido cae en el de siempre, nunca fuera de la carpeta")
 
+# --------------------------------------- #096 el divisorio no llega al respaldo
+#
+# Mike: «no deben llegar hasta el fondo, se les debe restar el espesor del
+# panel de fondo». El 3D lo enseñaba: el divisorio atravesaba el respaldo. Y de
+# paso se vio que el despiece y el dibujo sacaban el fondo de fórmulas
+# distintas. Ahora los dos llaman a fondo_divisorio().
+print("\n== #096 FONDO DEL ENTREPAÑO DIVISORIO ==")
+import dataclasses as _dc                                         # noqa: E402
+from core.modelos import (fondo_divisorio as _fd,                 # noqa: E402
+                          Gabinete as _Gab, Frente as _Fre)
+from core.iso import solidos_gabinete as _sg                      # noqa: E402
+
+def _torre(std):
+    return _Gab(nombre="Torre", ancho=600, prof=600, alto=2100, tipo="base",
+                frentes=[_Fre(tipo=t, alto=(180.0 if t == "cajon" else None))
+                         for t in ("cajon", "abierto", "cajon")])
+
+_e6 = Estandar()
+_e18 = _dc.replace(_e6, mat_respaldo=_dc.replace(_e6.mat_respaldo, espesor=18.0))
+for _nom, _std in [("ranurado", _e6),
+                   ("sobrepuesto", _dc.replace(_e6, respaldo_ranurado=False)),
+                   ("interior 18mm", _e18)]:
+    _g = _torre(_std)
+    _div = [p for p in despiezar(_g, _std) if p.nombre == "Entrepaño divisorio"]
+    chk(bool(_div), f"{_nom}: el nicho genera divisorios")
+    _S = _sg(_g, _std)
+    _d3 = [s for s in _S if s.codigo == "DIV"]
+    _r3 = [s for s in _S if s.grupo == "respaldo"]
+    if _div and _d3 and _r3:
+        _fin, _resp = _d3[0].y + _d3[0].dy, _r3[0].y
+        chk(_fin <= _resp + 0.01,
+            f"{_nom}: el divisorio no se mete en el respaldo ({_fin:.0f} <= {_resp:.0f})")
+        chk(_div[0].ancho < _d3[0].dy + 1.01,
+            f"{_nom}: corte y 3D salen del mismo cálculo ({_div[0].ancho:.0f} vs {_d3[0].dy:.0f})")
+    # el descuento se hace una sola vez: si el respaldo va por dentro, prof_util
+    # ya lo traía restado y volver a restarlo comería fondo de más
+    chk(_fd(_std, 500.0, True) == 500.0, f"{_nom}: respaldo interior no se resta dos veces")
+    chk(_fd(_std, 500.0, False) == 500.0 - _std.mat_respaldo.espesor,
+        f"{_nom}: respaldo ranurado o sobrepuesto sí se resta")
+
 # ----------------------------------------------- #095 librerías del instalador
 #
 # Las 0.16.0 y 0.16.1 se publicaron sin cuatro librerías: la receta del flujo

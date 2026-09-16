@@ -600,6 +600,29 @@ def entrepanos_divisorios(g: Gabinete, std: Estandar,
     return sorted(res, key=lambda d: d["h"])
 
 
+def fondo_divisorio(std: Estandar, prof_util: float, interior: bool) -> float:
+    """#096 — Hasta dónde llega de fondo un entrepaño divisorio.
+
+    Mike: «no deben llegar hasta el fondo, se les debe restar el espesor del
+    panel de fondo». Tiene razón y el 3D lo enseñaba: el divisorio se dibujaba
+    atravesando el respaldo, metido seis milímetros dentro de él.
+
+    El respaldo se monta de tres formas y sólo una necesita cuenta aparte:
+
+    - **Interior**, apoyado contra un rebaje: `prof_util` ya viene con su
+      espesor descontado, así que no se resta dos veces.
+    - **Ranurado**, metido en una ranura de los costados, o **sobrepuesto**,
+      clavado por fuera: `prof_util` es el fondo completo del cuerpo, y hay que
+      quitarle el espesor del respaldo para no llegar hasta él.
+
+    Esta función existe para que el despiece y el 3D saquen el número **del
+    mismo lugar**. Antes cada uno lo calculaba por su cuenta y no coincidían:
+    la lista de corte decía 552 y el dibujo 559. Una pieza que se corta de un
+    tamaño y se dibuja de otro es una pieza que un día no entra.
+    """
+    return round(prof_util - (0.0 if interior else std.mat_respaldo.espesor), 1)
+
+
 def respaldo_interior(std: Estandar) -> bool:
     """#003: los respaldos gruesos van encajonados, no ranurados."""
     return std.mat_respaldo.espesor >= std.respaldo_interior_desde
@@ -766,7 +789,7 @@ def despiezar(g: Gabinete, std: Estandar, pref: str = "1") -> List[Pieza]:
     # ---------------- ENTREPAÑOS DIVISORIOS ----------------  #089
     divs = entrepanos_divisorios(g, std, hc)
     if divs:
-        p_div = round(prof_util - (er if ranurado else 0), 1)
+        p_div = fondo_divisorio(std, prof_util, interior)      # #096
         P.append(Pieza(f"{pref}-DIV", "Entrepaño divisorio", largo=ancho_int,
                        ancho=p_div, espesor=e, material=mc, cantidad=len(divs),
                        canto=_canto_visible(std, 0), mueble=g.nombre,
