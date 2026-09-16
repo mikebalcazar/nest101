@@ -456,6 +456,56 @@ for _nom, _std in [("ranurado", _e6),
     chk(_fd(_std, 500.0, False) == 500.0 - _std.mat_respaldo.espesor,
         f"{_nom}: respaldo ranurado o sobrepuesto sí se resta")
 
+# ------------------------------------- #097 alto de las paredes de la caja
+#
+# Mike: «la altura de las paredes del cajón debe ser por default del 80 % de la
+# altura del frente, redondeada al número cerrado (cm) más cercano hacia
+# arriba. Aparte, una opción de editarla por cajón».
+#
+# Antes era un número fijo del estándar —90 mm para todos—, y daba la misma
+# caja bajo un frente de 120 y bajo uno de 300.
+print("\n== #097 ALTO DE LA CAJA DEL CAJÓN ==")
+from core.iso import solidos_gabinete as _sol                      # noqa: E402
+from core.modelos import alto_caja_de as _aca                      # noqa: E402
+from core.modelos import Frente as _Fr, Gabinete as _Gb            # noqa: E402
+
+for _frente, _esperado, _porque in [
+        (120.0, 100.0, "96 sube a 100"),
+        (150.0, 120.0, "120 ya es cerrado, no sube"),
+        (180.0, 150.0, "144 sube a 150"),
+        (200.0, 160.0, "160 ya es cerrado"),
+        (300.0, 240.0, "240 ya es cerrado"),
+        (89.0, 80.0, "71.2 sube a 80")]:
+    chk(_aca(_frente) == _esperado,
+        f"frente {_frente:.0f} → caja {_aca(_frente):.0f} mm ({_porque})")
+
+chk(_aca(180.0) == _aca(180.0, _Fr("cajon", alto=180.0)),
+    "sin valor a mano, el frente no cambia la cuenta")
+chk(_aca(180.0, _Fr("cajon", alto=180.0, alto_caja=120.0)) == 120.0,
+    "un valor puesto a mano manda sobre el 80 %")
+chk(_aca(180.0, _Fr("cajon", alto=180.0, alto_caja=None)) == 150.0,
+    "dejarlo vacío vuelve al automático")
+
+# Y lo que importa de verdad: que ese alto llegue igual a las dos salidas.
+_g97 = _Gb(nombre="V", tipo="base", ancho=600.0, alto=880.0, prof=600.0,
+           frentes=[_Fr("cajon", alto=180.0), _Fr("cajon", alto=300.0),
+                    _Fr("cajon", alto=180.0, alto_caja=120.0)])
+_P97 = [q for q in despiezar(_g97, std) if "Lateral caja" in q.nombre]
+_S97 = [x for x in _sol(_g97, std) if x.grupo == "cajon" and "Lateral izq" in x.etiqueta]
+chk([q.ancho_final for q in _P97] == [150.0, 240.0, 120.0],
+    f"corte: los tres cajones salen 150/240/120 → {[q.ancho_final for q in _P97]}")
+chk([round(x.dz, 1) for x in _S97] == [150.0, 240.0, 120.0],
+    f"3D: los tres cajones salen 150/240/120 → {[round(x.dz, 1) for x in _S97]}")
+
+# Un alto de caja imposible se rechaza con mensaje, no con traceback.
+try:
+    despiezar(_Gb(nombre="V", tipo="base", ancho=600.0, alto=880.0, prof=600.0,
+                  frentes=[_Fr("cajon", alto=180.0, alto_caja=-5.0)]), std)
+    _ok97, _m97 = False, "no se rechazó"
+except GeometriaInvalida as _e:
+    _ok97, _m97 = True, str(_e)[:60]
+chk(_ok97, f"un alto de caja negativo se rechaza — «{_m97}…»")
+
 # ------------------------------------------- #096 el 3D contra la lista de corte
 #
 # Mike: «necesito que el 3D dibuje los cajones como se están computando, no un
@@ -471,9 +521,6 @@ for _nom, _std in [("ranurado", _e6),
 # la terminada. Comparar contra la de corte daría un error de un milímetro por
 # cada canto y sería la comprobación la que está mal.
 print("\n== #096 EL 3D CONTRA LA LISTA DE CORTE ==")
-from core.iso import solidos_gabinete as _sol                      # noqa: E402
-from core.modelos import Frente as _Fr, Gabinete as _Gb            # noqa: E402
-
 def _terminada(pz):
     """Las tres medidas de la pieza ya armada, ordenadas para poder compararlas
     sin depender de cómo se orientó en el mueble."""

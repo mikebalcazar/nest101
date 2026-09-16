@@ -185,9 +185,10 @@ main{flex:1;display:flex;min-height:0}
 
 /* ---------- frentes ---------- */
 .frente{background:var(--panel2);border:1px solid var(--linea);border-radius:var(--r);
-  padding:8px;margin-bottom:7px;display:grid;grid-template-columns:76px 1fr 46px 24px;
+  padding:8px;margin-bottom:7px;display:grid;grid-template-columns:76px 1fr 46px 52px 24px;   /* #097: +Caja */
   gap:6px;align-items:end}
 .frente .lbl{font-size:10px;color:var(--txt3)}
+/* #097 */ .pista{font-size:10px;color:var(--txt3);font-weight:400;text-transform:none}
 .frente .del{background:transparent;border:none;color:var(--txt3);padding:4px}
 .frente .del:hover{color:var(--peligro)}
 

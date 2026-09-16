@@ -19,6 +19,11 @@ class Frente:
     tipo: str            # "puerta" | "cajon" | "abierto"  (#090)
     alto: Optional[float] = None   # None = reparte el sobrante
     n: int = 1           # nº de hojas (solo puertas)
+    # #097 — alto de las paredes de la caja, sólo para cajones.
+    # None = se calcula solo: 80 % del alto del frente, redondeado al
+    # centímetro cerrado de arriba. Un número aquí lo pisa, para el cajón de
+    # cubiertos que va bajito o el de ollas que va alto.
+    alto_caja: Optional[float] = None
 
 
 @dataclass
@@ -118,6 +123,9 @@ def validar(g: Gabinete, std: Estandar):
             raise GeometriaInvalida(
                 f"«{n}»: «{f.tipo}» no es un tipo de frente. "
                 "Sólo hay puerta, cajón y abierto.")
+        if f.alto_caja is not None and float(f.alto_caja) <= 0:      # #097
+            raise GeometriaInvalida(
+                f"«{n}»: el alto de la caja del cajón debe ser mayor que 0.")
         if f.tipo == "puerta" and f.n < 1:
             raise GeometriaInvalida(f"«{n}»: una puerta necesita al menos una hoja.")
 
@@ -623,6 +631,29 @@ def fondo_divisorio(std: Estandar, prof_util: float, interior: bool) -> float:
     return round(prof_util - (0.0 if interior else std.mat_respaldo.espesor), 1)
 
 
+def alto_caja_de(alto_frente: float, frente: "Frente" = None) -> float:
+    """#097 — Cuánto miden las paredes de la caja de un cajón.
+
+    Mike: «la altura de las paredes del cajón debe ser por default del 80 % de
+    la altura del frente, redondeada al número cerrado (cm) más cercano hacia
+    arriba».
+
+    Antes era un número fijo del estándar —90 mm para todos—, y eso daba cajas
+    iguales bajo frentes de 120 y de 300: el de ollas quedaba ridículo y el de
+    cubiertos, hondísimo. Ahora la caja crece con su frente.
+
+    El 80 % deja el 20 % de abajo para la corredera y el remate, y el redondeo
+    va **hacia arriba** porque en el taller se compra y se corta en medidas
+    cerradas: 144 se pide como 150, no como 140.
+
+    Un valor puesto a mano en el frente manda sobre todo esto.
+    """
+    if frente is not None and frente.alto_caja:
+        return round(float(frente.alto_caja), 1)
+    import math as _m
+    return float(_m.ceil(max(float(alto_frente), 0.0) * 0.8 / 10.0) * 10)
+
+
 def respaldo_interior(std: Estandar) -> bool:
     """#003: los respaldos gruesos van encajonados, no ranurados."""
     return std.mat_respaldo.espesor >= std.respaldo_interior_desde
@@ -859,7 +890,8 @@ def despiezar(g: Gabinete, std: Estandar, pref: str = "1") -> List[Pieza]:
             P.append(Pieza(f"{pref}-FCJ{ic}", f"Frente de cajón {ic}", largo=aw,
                            ancho=m["alto_frente"], espesor=ef, material=mf, cantidad=1,
                            canto=(std.canto_visible,) * 4, veta=True, mueble=g.nombre))
-            P += _piezas_caja_cajon(g, std, prof_util, ancho_int, ic, pref)
+            P += _piezas_caja_cajon(g, std, prof_util, ancho_int, ic, pref,
+                                    alto_caja_de(m["alto_frente"], m["frente"]))
 
     # ---------------- ZOCLO ----------------
     if hz:
@@ -905,12 +937,14 @@ def _numerar(P: List[Pieza], pref: str) -> List[Pieza]:
     return P
 
 
-def _piezas_caja_cajon(g, std, pc, ancho_int, idx, pref) -> List[Pieza]:
+def _piezas_caja_cajon(g, std, pc, ancho_int, idx, pref, h=None) -> List[Pieza]:
     ec = std.mat_cajon.espesor
     ancho_caja = round(ancho_int - 2 * std.holgura_corredera_lado, 1)
     util = pc - std.retranqueo_fondo_cajon
     largo_corr = max([l for l in LARGOS_CORREDERA if l <= util], default=LARGOS_CORREDERA[0])
-    h = std.alto_caja_cajon
+    # #097 — el alto lo manda el frente, no el estándar. El valor del estándar
+    # queda sólo como red por si alguien llama a esta función sin pasarlo.
+    h = float(h) if h else std.alto_caja_cajon
     a_int = round(ancho_caja - 2 * ec, 1)
     mcj, mfc = std.mat_cajon.nombre, std.mat_fondo_cajon.nombre
     return [
