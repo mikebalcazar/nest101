@@ -416,6 +416,47 @@ chk("descargas" in _ruta, "y dentro de la carpeta de descargas del taller")
 chk(_ACT.destino_de("0.16.0", "../fuera.exe") == _ACT.destino_de("0.16.0"),
     "un nombre torcido cae en el de siempre, nunca fuera de la carpeta")
 
+# ----------------------------------------------- #095 librerías del instalador
+#
+# Las 0.16.0 y 0.16.1 se publicaron sin cuatro librerías: la receta del flujo
+# instalaba siete paquetes y el código importa once. Todo salió verde —las
+# comprobaciones de aquí sólo tocan el motor de cálculo, que no las usa— y el
+# instalador se publicó roto: al arrancar, server.py reventaba al importar y la
+# app se quedaba clavada en la pantalla de arranque, sin decir por qué.
+#
+# Esto corre con el MISMO Python que viaja dentro del instalador, así que si
+# falta una, la compilación se pone roja antes de publicar nada.
+print("\n== #095 LIBRERÍAS QUE NECESITA LA APP ==")
+import importlib as _il                                           # noqa: E402
+
+for _lib, _para in [
+        ("fastapi", "el servidor"), ("uvicorn", "el servidor"),
+        ("pydantic", "validar lo que llega"), ("multipart", "recibir archivos subidos"),
+        ("numpy", "cálculo"), ("PIL", "imágenes"),
+        ("ezdxf", "exportar DXF"), ("openpyxl", "exportar Excel"),
+        ("reportlab", "exportar PDF"), ("cv2", "leer planos"),
+        ("pypdfium2", "abrir planos en PDF"), ("anthropic", "identificar piezas")]:
+    try:
+        _il.import_module(_lib)
+        _ok, _detalle = True, ""
+    except Exception as _e:                                       # noqa: BLE001
+        _ok, _detalle = False, f" — {type(_e).__name__}: {_e}"
+    chk(_ok, f"{_lib} carga ({_para}){_detalle}")
+
+# multipart no se importa en el código, pero FastAPI lo exige en cuanto una ruta
+# recibe un archivo. Sin él la app no truena al compilar: truena al arrancar.
+try:
+    from fastapi import FastAPI as _FA, File as _File, UploadFile as _UF
+    _app = _FA()
+
+    @_app.post("/x")
+    async def _subir(f: _UF = _File(...)):                        # noqa: ANN202
+        return {}
+    _ok2, _d2 = True, ""
+except Exception as _e:                                           # noqa: BLE001
+    _ok2, _d2 = False, f" — {_e}"
+chk(_ok2, f"una ruta que recibe archivos se puede declarar{_d2}")
+
 # El veredicto va AL FINAL y con código de salida.
 #
 # Estaba a la mitad del archivo y sin `sys.exit`: contaba sólo lo que había
