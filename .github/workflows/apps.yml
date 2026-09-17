@@ -36,6 +36,7 @@ on:
 
 permissions:
   contents: read
+  actions: write   # para podar artefactos viejos del propio repo
 
 jobs:
   windows:
@@ -158,6 +159,28 @@ jobs:
           name: nest101-${{ inputs.version }}-setup
           path: dist/nest101-${{ inputs.version }}-setup.exe
           retention-days: 14
+
+      # Mike, 17-sep-2026: en GitHub sólo se quedan los 3 instaladores más
+      # recientes; los demás se borran aquí mismo, al final de cada corrida.
+      # El instalador que cuenta vive en descargas; el artefacto es sólo el
+      # respaldo del run, y 6 GB de respaldos fueron parte de lo que agotó el
+      # plan de Actions en septiembre. Necesita `actions: write` (arriba).
+      - name: Podar artefactos viejos (quedan los 3 más recientes)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FAMILIA: nest101-
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired|not) | [.created_at, .id, .name] | @tsv' \
+          | awk -F'\t' -v f="$FAMILIA" 'index($3,f)==1' \
+          | sort -r | tail -n +4 \
+          | while IFS=$'\t' read -r fecha id nombre; do
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$id" >/dev/null
+              echo "borrado $nombre ($fecha)"
+            done
+          echo "familia $FAMILIA: quedan a lo más 3 artefactos"
 
       # ------------------------------------------------------------ publicar
       #
