@@ -233,6 +233,14 @@ tampoco ahí, se le dice a Mike qué quedó sin verificar. Nunca se supone.
 - Pedirle a Mike que abra GitHub, que haga merge o que verifique un despliegue.
   Todo eso lo hace el chat.
 - Escribir, leer o listar secretos. Se comprueban por el deploy en verde.
+- **Escribir el mensaje de un commit donde el shell pueda expandirlo.** Va
+  siempre por `git commit -F -` con un heredoc entre comillas simples
+  (`<<'EOF'`). Con el heredoc sin comillas, un acento grave en el texto
+  ejecuta lo que encierra: el 8-sep-2026 un mensaje con `` `env` `` volcó el
+  entorno entero de la sesión —con un token de GitHub— al historial de
+  suite101-api (c97587e); GitHub lo encontró al hacerse público el repo y lo
+  revocó el 18-sep. Los repositorios son públicos: lo que entra a un commit
+  lo ve cualquiera, y el historial no se reescribe.
 - Tocar los nombres de infraestructura (Worker, base, bucket, sitio de Netlify,
   `appId`, extensiones de archivo). Renombrarlos desliga cosas que ya viven.
 - Rodear el proxy. Si no alcanza, se reporta.
