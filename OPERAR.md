@@ -1,18 +1,16 @@
 # Cómo opera un chat en este repositorio
 
-Este archivo va **igual en los once repositorios**: `descargas`,
-`suite101-api`, `cotizador-t101`, `dash101`, `bitacora-obra`,
-`t101-portal-trabajadores`, `taller101`, `wall101`, `nest101`, `peek101` y
-`draw101`. Si lo cambias en uno, cópialo a los demás en el mismo trabajo: once
-copias que se separan son peor que ninguna. El 12-sep se comprobaron las once
-y estaban idénticas salvo el nombre del repositorio en las direcciones de
-`api.github.com`, que es la única diferencia que debe haber. Es el contrato:
-un chat nuevo lo lee y ya sabe trabajar sin preguntarle nada a Mike y sin que
-Mike prenda su computadora.
+Este archivo va **igual en los catorce repositorios**: `suite101-api`,
+`master101`, `workshop101`, `dash101`, `peek101`, `cotizador-t101`,
+`bitacora-obra`, `t101-portal-trabajadores`, `draw101`, `nest101`, `shape101`,
+`descargas`, `wall101` y `docs101`. Si lo cambias en uno, cópialo a los demás
+en el mismo trabajo: catorce copias que se separan son peor que ninguna. La
+única diferencia que debe haber entre copias es el nombre del repositorio en
+las direcciones de `api.github.com`. Es el contrato: un chat nuevo lo lee y ya
+sabe trabajar sin preguntarle nada a Mike y sin que Mike prenda su computadora.
 
-`nest101`, `peek101` y `draw101` todavía no tienen código: el archivo llegó
-primero, para que el chat que los estrene no empiece inventando su manera de
-trabajar.
+`taller101` (SUPERVISOR) se retiró el 18-sep-2026 por decisión de Mike: sus
+funciones se integrarán en quell101 más adelante.
 
 La regla de fondo: **Mike decide, el chat ejecuta y mide.** Si un chat te está
 pidiendo que abras GitHub, que hagas merge o que le digas si el sitio quedó
