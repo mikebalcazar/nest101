@@ -201,6 +201,7 @@ jobs:
           SHA: ${{ steps.medir.outputs.sha256 }}
           MEGAS: ${{ steps.medir.outputs.megas }}
           NOTAS: ${{ inputs.notas }}
+          PYTHONUTF8: "1"
         shell: bash
         run: |
           set -euo pipefail
@@ -211,11 +212,19 @@ jobs:
           FECHA=$(date -u +%Y-%m-%d)
 
           # Notas: llegan separadas por | y se publican una por renglón.
-          python - <<'PY' > notas.txt
+          #
+          # El archivo se escribe con encoding="utf-8" A PROPÓSITO, en vez de
+          # redirigir la salida de python: en Windows, `python > archivo` usa
+          # la codificación de la consola (cp1252), y el paso de más abajo lee
+          # notas.txt como UTF-8. Una sola «ñ» —«contraseña»— tiraba la
+          # publicación a medias: la release ya subida y nest101.json sin
+          # actualizar, o sea el instalador publicado y nadie enterándose.
+          python - <<'PY'
           import os
           n = os.environ.get("NOTAS", "").strip()
-          print("\n".join(x.strip() for x in n.split("|") if x.strip()) or
-                "Compilada y verificada por el chat.")
+          texto = "\n".join(x.strip() for x in n.split("|") if x.strip()) or "Compilada y verificada por el chat."
+          with open("notas.txt", "w", encoding="utf-8") as f:
+              f.write(texto + "\n")
           PY
 
           # 1. la release con número
