@@ -50,6 +50,12 @@ jobs:
         with:
           node-version: "22"
 
+      # La puerta de licencia es JavaScript y no la alcanza verificar.py, que
+      # es de Python. Corre siempre: son dos segundos, y dejar salir un
+      # instalador que no abre es lo caro.
+      - name: Pruebas de la puerta de licencia
+        run: node pruebas/licencia.mjs
+
       # La versión se escribe en dos lugares y los dos tienen que coincidir:
       # `package.json` es la que va en el .exe, `server.py` es la que contesta
       # /api/salud y contra la que se compara la publicada. Desfasarlas deja un

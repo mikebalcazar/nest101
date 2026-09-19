@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require("electron");
+const licencia = require("./licencia");
 const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
@@ -534,6 +535,23 @@ if (!soloUna) {
       const vp = await session.defaultSession.resolveProxy(`http://127.0.0.1:${PUERTO}/`);
       registrar(`proxy para el backend: ${vp}`);
     } catch (e) { registrar("no se pudo revisar el proxy: " + e.message); }
+
+    /* La puerta de licencia va ANTES del backend: si este equipo no tiene
+     * licencia, arrancar Python sería trabajo tirado, y la pantalla de la
+     * suite se ve mejor sin el splash encima. */
+    cerrarSplash();
+    const paso = await licencia.asegurar({ version: app.getVersion(), avisar: registrar });
+    if (!paso.ok) {
+      if (paso.motivo === "sin_red") {
+        const { dialog } = require("electron");
+        dialog.showErrorBox("nest101",
+          "La licencia de este equipo ya venció y no hubo forma de llegar a la suite para renovarla.\n\n" +
+          "Conéctate a internet y vuelve a abrir nest101.");
+      }
+      app.quit();
+      return;
+    }
+    crearSplash();
 
     let motivo = null;
     try {
