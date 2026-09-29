@@ -24,6 +24,34 @@ const porque = (nombre) => ({
   token_invalido: "La activación de este equipo ya no sirve. Hay que volver a entrar.",
 });
 
+/* Cómo se llama esta computadora, y en qué sistema va  ·  28-sep-2026.
+ *
+ * Mike pidió una lista de equipos para dar de baja uno, como la de Adobe, «que
+ * ponga el nombre del equipo como lo tiene en su windows. Cada quien sabrá qué
+ * computadora es». La lista la sirve suite101-api y es la misma para todas las
+ * apps de la suite: si nest101 no manda su nombre, sus equipos salen ahí como
+ * una huella recortada y no hay forma de saber cuál dar de baja.
+ *
+ * El nombre viaja **aparte** de la huella, y esa línea no se cruza: la huella
+ * sigue siendo el azar guardado en `equipo.json` y de ella no se saca el
+ * nombre de nadie. El nombre es una etiqueta para que su dueño reconozca su
+ * propia computadora en su propia lista.
+ */
+function nombreDelEquipo() {
+  try {
+    const n = String(os.hostname() || "").trim();
+    // Sin el sufijo de red («TALLER-PC.local»), que no ayuda a distinguir.
+    return n.split(".")[0].slice(0, 60) || null;
+  } catch { return null; }
+}
+
+function sistemaDelEquipo() {
+  try {
+    const p = os.platform();
+    return p === "win32" ? "windows" : p === "darwin" ? "mac" : "linux";
+  } catch { return null; }
+}
+
 /** El identificador de este equipo, que es lo que cuenta un «lugar».
  *
  *  NO es la MAC ni el número de serie del disco: es un azar que se guarda la
@@ -85,7 +113,8 @@ async function latido({ api, carpeta, nombre, d, version, traer = fetch }) {
     r = await traer(`${api}/licencias/latido`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: d.token, huella: huella(carpeta), version }),
+      body: JSON.stringify({ token: d.token, huella: huella(carpeta), version,
+                             nombre: nombreDelEquipo(), sistema: sistemaDelEquipo() }),
     });
   } catch { return { sinRed: true }; }
   let cuerpo = null;
@@ -106,8 +135,14 @@ function direccionDeLaPantalla({ api, programa, nombre, huella: h, version, avis
   u.searchParams.set("huella", h);
   u.searchParams.set("app", nombre);
   if (version) u.searchParams.set("version", version);
+  // Para que la pantalla los mande al activar, y la lista de equipos se pueda
+  // leer desde el primer día de esta máquina.
+  const equipo = nombreDelEquipo();
+  if (equipo) u.searchParams.set("equipo", equipo);
+  const sistema = sistemaDelEquipo();
+  if (sistema) u.searchParams.set("sistema", sistema);
   if (aviso) u.searchParams.set("aviso", aviso);
   return u.toString();
 }
 
-module.exports = { API_POR_OMISION, huella, guardada, guardar, olvidar, alCorriente, latido, porque, direccionDeLaPantalla, archivoLicencia };
+module.exports = { API_POR_OMISION, huella, nombreDelEquipo, sistemaDelEquipo, guardada, guardar, olvidar, alCorriente, latido, porque, direccionDeLaPantalla, archivoLicencia };

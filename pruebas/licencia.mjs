@@ -88,6 +88,41 @@ console.log('\n· la pantalla que se abre');
   rev(u.pathname === '/licencias/entrar', 'es la pantalla de la suite, no una propia');
   rev(u.searchParams.get('programa') === 'nest101' && u.searchParams.get('huella') === 'equipo-0123456789abcdef', 'y le dice qué programa y qué equipo');
   rev(!u.toString().includes('token'), 'la dirección no lleva ningún token: una dirección se copia y se queda en registros');
+  rev(u.searchParams.get('equipo') === n.nombreDelEquipo(), 'y cómo se llama este equipo, para la lista de equipos de la suite');
+  rev(['windows', 'mac', 'linux'].includes(u.searchParams.get('sistema')), 'y en qué sistema va, que es el ícono de esa lista', u.searchParams.get('sistema'));
+}
+
+/* El nombre del equipo  ·  28-sep-2026. Mike pidió la lista estilo Adobe para
+ * dar de baja un equipo, «que ponga el nombre del equipo como lo tiene en su
+ * windows». La lista la sirve suite101-api y es la misma para toda la suite:
+ * si nest101 no manda su nombre, sus equipos salen ahí sin nombre.
+ *
+ * La línea que no se puede cruzar: el nombre va APARTE, como etiqueta. La
+ * huella sigue siendo el azar guardado y de ella no se saca el nombre de
+ * nadie. Si algún día alguien vuelve a meter el hostname en la huella, esta
+ * prueba lo caza. */
+console.log('\n· cómo se llama este equipo');
+{
+  const nombre = n.nombreDelEquipo();
+  rev(typeof nombre === 'string' && nombre.length > 0 && nombre.length <= 60, 'la app sabe cómo se llama esta computadora', nombre);
+  rev(!nombre.includes('.'), 'sin el sufijo de red, que alarga y no distingue');
+  rev(['windows', 'mac', 'linux'].includes(n.sistemaDelEquipo()), 'y en qué sistema va');
+
+  const carpeta = dir();
+  const h = n.huella(carpeta);
+  rev(!h.includes(nombre), 'la HUELLA no lleva el nombre dentro: sigue sin identificar a nadie');
+  rev(n.huella(carpeta) === h, 'y es la misma en el siguiente arranque, como siempre');
+
+  /* Que la huella NO salga del hostname ya lo mide el primer bloque: si
+   * saliera, dos instalaciones del mismo equipo darian la misma y «otra
+   * instalacion es otro equipo» fallaria. Aqui no se repite. */
+
+  const mandado = [];
+  const espia = { api: 'https://x', carpeta, nombre: 'nest101', d: { token: 'v1.x', hasta: enDias(5) },
+    traer: async (_u, o) => { mandado.push(JSON.parse(o.body)); return { ok: true, status: 200, json: async () => ({ ok: true, data: { token: 'v1.y', hasta: enDias(20), licencia: {} } }) }; } };
+  await n.latido(espia);
+  rev(mandado[0].nombre === nombre, 'el latido diario lo manda, así que la lista se llena sola sin reactivar nada');
+  rev(mandado[0].huella === h, 'junto a la huella de siempre');
 }
 
 console.log(`\n${fallas ? `${fallas} FALLA${fallas > 1 ? 'S' : ''}` : 'todo bien'} · ${revisadas - fallas} de ${revisadas} pasaron\n`);
