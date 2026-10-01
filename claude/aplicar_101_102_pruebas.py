@@ -106,7 +106,7 @@ BLOQUE_PDF = '''# ------------------------------------- #101 un isométrico por 
 print("\\n== #101: cada mueble con SU isométrico ==")
 try:
     import hashlib as _hl, tempfile as _tf, os as _os              # noqa: E402
-    from pypdf import PdfReader as _Rd                             # noqa: E402
+    import pypdfium2 as _fium                                      # noqa: E402
     from export import pdf as _PDF                                 # noqa: E402
     from core.proyecto import Proyecto as _Pr                      # noqa: E402
 
@@ -117,20 +117,27 @@ try:
     _ruta = _os.path.join(_tf.mkdtemp(prefix="despz_v101_"), "proyecto.pdf")
     _PDF.exportar_proyecto([_m1, _m2], [], _ruta, proyecto="Prueba")
 
-    _por_imagen, _marca = {}, None
-    for _i, _pg in enumerate(_Rd(_ruta).pages, 1):
-        for _im in _pg.images:
-            _h = _hl.sha256(_im.data).hexdigest()[:12]
-            _por_imagen.setdefault(_h, []).append(_i)
-    # la marca del membrete sí va en todas las páginas: es la única que se repite
-    _repes = {_h: _ps for _h, _ps in _por_imagen.items() if len(set(_ps)) > 1}
-    chk(len(_repes) <= 1,
-        f"ninguna imagen de isométrico se repite entre páginas (repetidas: {len(_repes)}, "
-        f"la del membrete incluida)")
-    chk(len(_por_imagen) >= 7,
-        f"el PDF trae {len(_por_imagen)} imágenes distintas: 6 isométricos + el membrete")
+    # Se lee con pypdfium2 **a propósito**: es la librería que viaja dentro del
+    # instalador, así que esta comprobación corre también en el armado, con el
+    # mismo Python. Con una librería de sólo-pruebas se saltaría justo donde
+    # importa.
+    _isos = []
+    _doc = _fium.PdfDocument(_ruta)
+    for _i in range(len(_doc)):
+        for _obj in _doc[_i].get_objects():
+            if _obj.type != 3:                 # 3 = imagen
+                continue
+            _im = _obj.get_bitmap(render=False).to_pil()
+            if _im.size[0] < 1000:             # el membrete, que sí va en todas
+                continue
+            _isos.append((_i + 1, _hl.sha256(_im.tobytes()).hexdigest()[:12]))
+    chk(len(_isos) == 6, f"el PDF trae {len(_isos)} isométricos: conjunto, armado y despiece de cada mueble")
+    _repes = [(a, b) for j, (a, hh) in enumerate(_isos) for (b, h2) in _isos[j + 1:] if hh == h2]
+    chk(not _repes,
+        "ningún isométrico se repite entre páginas"
+        + ("" if not _repes else f" — repetidos en {_repes}"))
 except ImportError as _e:                                          # noqa: BLE001
-    print(f"  (sin pypdf en esta máquina: la comprobación del PDF se salta — {_e})")
+    print(f"  (sin pypdfium2 en esta máquina: la comprobación del PDF se salta — {_e})")
 
 '''
 
