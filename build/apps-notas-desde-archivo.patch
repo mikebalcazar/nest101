@@ -1,8 +1,8 @@
 diff --git a/.github/workflows/apps.yml b/.github/workflows/apps.yml
-index 6a2ee51..e8b0a3f 100644
+index 6a2ee51..f10619a 100644
 --- a/.github/workflows/apps.yml
 +++ b/.github/workflows/apps.yml
-@@ -253,9 +253,21 @@ jobs:
+@@ -249,9 +249,21 @@ jobs:
            # publicación a medias: la release ya subida y nest101.json sin
            # actualizar, o sea el instalador publicado y nadie enterándose.
            python - <<'PY'
