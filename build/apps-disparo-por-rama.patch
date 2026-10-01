@@ -1,0 +1,98 @@
+diff --git a/.github/workflows/apps.yml b/.github/workflows/apps.yml
+index 5e9dba2..6a2ee51 100644
+--- a/.github/workflows/apps.yml
++++ b/.github/workflows/apps.yml
+@@ -20,6 +20,13 @@ name: apps
+ # publicar: los talleres se la bajan sola y el instalador falla raro.
+ 
+ on:
++  # Disparo por rama, igual que draw101 (muro 2026-09-14-1000): el conector de
++  # GitHub del chat no puede escribir en `.github/workflows/` ni llamar a la API
++  # de Actions, pero sí **crea ramas**, y crear una rama es un evento `push`.
++  # Así el chat publica solo: `claude/publicar-0.19.0` arma y publica la 0.19.0.
++  # La versión sale del nombre de la rama; a mano sigue saliendo del formulario.
++  push:
++    branches: ['claude/publicar-*']
+   workflow_dispatch:
+     inputs:
+       version:
+@@ -60,10 +67,32 @@ jobs:
+       # `package.json` es la que va en el .exe, `server.py` es la que contesta
+       # /api/salud y contra la que se compara la publicada. Desfasarlas deja un
+       # programa que se cree otra versión de la que es y no se actualiza nunca.
++      # De dónde sale la versión: del formulario si se disparó a mano, y del
++      # nombre de la rama si lo disparó el chat. Un solo lugar lo decide, y de
++      # ahí lo lee todo lo demás.
++      - name: De dónde sale la versión
++        id: pedido
++        shell: bash
++        run: |
++          set -euo pipefail
++          V="${{ inputs.version }}"
++          if [ -z "$V" ]; then V="${GITHUB_REF#refs/heads/claude/publicar-}"; fi
++          case "$V" in
++            *.*.*) : ;;
++            *) echo "no sé qué versión publicar (ref: $GITHUB_REF)" >&2; exit 1;;
++          esac
++          echo "version=$V" >> "$GITHUB_OUTPUT"
++          if [ "${{ github.event_name }}" = "push" ]; then
++            echo "publicar=true" >> "$GITHUB_OUTPUT"
++          else
++            echo "publicar=${{ inputs.publicar }}" >> "$GITHUB_OUTPUT"
++          fi
++          echo "versión $V · publicar: desde ${{ github.event_name }}"
++
+       - name: Escribir la versión en los dos lugares
+         shell: pwsh
+         run: |
+-          $v = "${{ inputs.version }}"
++          $v = "${{ steps.pedido.outputs.version }}"
+           if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "versión no es semver: $v" }
+           $p = Get-Content package.json -Raw | ConvertFrom-Json
+           $p.version = $v
+@@ -139,7 +168,7 @@ jobs:
+         id: medir
+         shell: pwsh
+         run: |
+-          $v = "${{ inputs.version }}"
++          $v = "${{ steps.pedido.outputs.version }}"
+           $f = "dist/nest101-$v-setup.exe"
+           if (-not (Test-Path $f)) { throw "no se generó $f" }
+           $b = (Get-Item $f).Length
+@@ -162,8 +191,8 @@ jobs:
+       - name: Guardar el instalador como artefacto
+         uses: actions/upload-artifact@v4
+         with:
+-          name: nest101-${{ inputs.version }}-setup
+-          path: dist/nest101-${{ inputs.version }}-setup.exe
++          name: nest101-${{ steps.pedido.outputs.version }}-setup
++          path: dist/nest101-${{ steps.pedido.outputs.version }}-setup.exe
+           retention-days: 14
+ 
+       # Mike, 17-sep-2026: en GitHub sólo se quedan los 3 instaladores más
+@@ -193,10 +222,10 @@ jobs:
+       # TOKEN_DESCARGAS es un PAT con escritura en `mikebalcazar/descargas`. El
+       # GITHUB_TOKEN de este repositorio no sirve: no alcanza a otro repo.
+       - name: Publicar en descargas
+-        if: inputs.publicar
++        if: steps.pedido.outputs.publicar == 'true'
+         env:
+           GH_TOKEN: ${{ secrets.TOKEN_DESCARGAS }}
+-          V: ${{ inputs.version }}
++          V: ${{ steps.pedido.outputs.version }}
+           BYTES: ${{ steps.medir.outputs.bytes }}
+           SHA: ${{ steps.medir.outputs.sha256 }}
+           MEGAS: ${{ steps.medir.outputs.megas }}
+@@ -286,10 +315,10 @@ jobs:
+       # Lo que se publicó se comprueba bajándolo de la dirección real. Si esto
+       # sale rojo, la release está mal aunque todo lo anterior saliera verde.
+       - name: Comprobar lo publicado
+-        if: inputs.publicar
++        if: steps.pedido.outputs.publicar == 'true'
+         shell: bash
+         env:
+-          V: ${{ inputs.version }}
++          V: ${{ steps.pedido.outputs.version }}
+           SHA: ${{ steps.medir.outputs.sha256 }}
+         run: |
+           set -euo pipefail
