@@ -1,0 +1,3 @@
+Un mal rato del servidor ya no le quita la licencia al taller: sólo la suite puede decir que no.
+Ayuda → «Licencia de este equipo…» dice con qué cuenta quedó y hasta cuándo, y permite cambiar de cuenta.
+Las notas de cada versión ya salen del repositorio, no de una frase genérica.

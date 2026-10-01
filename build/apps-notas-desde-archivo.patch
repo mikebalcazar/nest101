@@ -1,0 +1,28 @@
+diff --git a/.github/workflows/apps.yml b/.github/workflows/apps.yml
+index 6a2ee51..e8b0a3f 100644
+--- a/.github/workflows/apps.yml
++++ b/.github/workflows/apps.yml
+@@ -253,9 +253,21 @@ jobs:
+           # publicación a medias: la release ya subida y nest101.json sin
+           # actualizar, o sea el instalador publicado y nadie enterándose.
+           python - <<'PY'
+-          import os
++          import os, pathlib
+           n = os.environ.get("NOTAS", "").strip()
+-          texto = "\n".join(x.strip() for x in n.split("|") if x.strip()) or "Compilada y verificada por el chat."
++          texto = "\n".join(x.strip() for x in n.split("|") if x.strip())
++          if not texto:
++              # Disparado por rama no hay formulario, así que las notas salen del
++              # repositorio: `claude/notas-<version>.txt`, un renglón por cambio.
++              # Antes caía siempre en la frase genérica, y esas notas son lo que
++              # el taller lee en el aviso de actualizar.
++              archivo = pathlib.Path(f"claude/notas-{os.environ['V']}.txt")
++              if archivo.exists():
++                  texto = archivo.read_text(encoding="utf-8").strip()
++                  print(f"notas tomadas de {archivo}")
++          if not texto:
++              texto = "Compilada y verificada por el chat."
++              print("sin notas: ni formulario ni archivo")
+           with open("notas.txt", "w", encoding="utf-8") as f:
+               f.write(texto + "\n")
+           PY
