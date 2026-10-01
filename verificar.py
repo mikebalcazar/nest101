@@ -743,6 +743,49 @@ try:
 except ImportError as _e:                                          # noqa: BLE001
     print(f"  (sin pypdfium2 en esta máquina: la comprobación del PDF se salta — {_e})")
 
+# ------------------------------------------ #103 el zoclo no se despieza
+#
+# Mike, 30-sep: «cuando se hagan los despieces y cortes no incluyas los zoclos.
+# Los zoclos sólo son para referencia para visualmente ver cómo queda el diseño,
+# pero esos no se hacen en este tipo de despiece».
+#
+# Se miden las dos mitades del asunto: que su pieza no aparezca en NINGUNA
+# salida —lista de corte, nesting, costeo— y que el zoclo siga existiendo donde
+# sí debe: restándole altura al cuerpo y dibujado en el 3D.
+print("\n== #103: el zoclo se ve, pero no se corta ==")
+_gz = _Gb(nombre="con zoclo", tipo="base", ancho=900, alto=900.0, prof=600,
+          con_zoclo=True, altura_zoclo=120.0, frentes=[_F("puerta", n=2)], n_entrepanos=1)
+_prz = Proyecto("t103"); _prz.estandar = std; _prz.gabinetes = [_gz]
+_pzz, _hjz, _solz = _prz.calcular()
+
+chk(not [x for x in _pzz if "zoclo" in x.nombre.lower()],
+    f"la lista de corte no trae zoclos ({len(_pzz)} piezas: "
+    + ", ".join(sorted({x.nombre for x in _pzz})) + ")")
+chk(not [c for h in _hjz for c in h.colocaciones if "zoclo" in c.pieza.nombre.lower()],
+    "ninguna hoja de nesting acomoda un zoclo")
+chk(not [x for x in _pzz if x.codigo.endswith("ZOC")],
+    "tampoco queda su código ZOC en ninguna pieza")
+chk(not [c for c in _prz.costeo(_pzz, _hjz) if "zoclo" in str(c.get("material", "")).lower()]
+    and all("zoclo" not in x.nombre.lower() for x in _pzz),
+    "el costeo tampoco lo cobra: sale de la misma lista")
+
+# y lo que NO debe cambiar
+_tz, _cz2, _hzz = alturas(_gz, std)
+chk(abs(_hzz - 120.0) < 0.01 and abs(_cz2 - (_tz - 120.0)) < 0.01,
+    f"el zoclo sigue restando: cuerpo {_cz2:.0f} = total {_tz:.0f} − zoclo {_hzz:.0f}")
+_cosz = next(x for x in _pzz if x.nombre == "Costado")
+chk(abs(_cosz.largo - _cz2) < 0.01,
+    f"el costado se corta al cuerpo, no al total: {_cosz.largo:.0f}")
+chk(any(s.grupo == "zoclo" for s in ISO.solidos_gabinete(_gz, std)),
+    "el 3D sí dibuja el zoclo: es para lo que sirve")
+
+# el control: un mueble que nunca tuvo zoclo no cambia en nada
+_gs = _Gb(nombre="sin zoclo", tipo="aereo", ancho=900, alto=700.0, prof=350,
+          frentes=[_F("puerta", n=2)])
+_prs = Proyecto("t103b"); _prs.estandar = std; _prs.gabinetes = [_gs]
+chk(len(_prs.calcular()[0]) == len([x for x in despiezar(_gs, std, "1")]),
+    "el aéreo entrega las mismas piezas que antes (control)")
+
 # ----------------------------------------------- #095 librerías del instalador
 #
 # Las 0.16.0 y 0.16.1 se publicaron sin cuatro librerías: la receta del flujo

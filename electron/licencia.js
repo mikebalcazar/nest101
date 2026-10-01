@@ -99,4 +99,60 @@ async function asegurar({ version, avisar } = {}) {
   return pedirEnPantalla(version);
 }
 
-module.exports = { asegurar, huella, guardada, API, PROGRAMA, NOMBRE };
+/* #100 — «¿Con qué cuenta estoy?», y poder cambiarla.
+ *
+ * Faltaba: una vez activado, no había manera de ver con qué correo quedó el
+ * equipo ni hasta cuándo, y la única forma de pasarlo a otra cuenta era
+ * borrar a mano un archivo dentro de AppData. Eso no se le pide a nadie.
+ *
+ * El diálogo vive aquí y no en `main.js` a propósito: `main.js` ya lleva el
+ * arranque, el backend, el menú y los avisos, y esto es de la licencia. Desde
+ * allá se llama con un renglón. El texto que se enseña se arma en el núcleo,
+ * para poder medirlo sin abrir una ventana.
+ */
+function resumen() {
+  return n.resumen(guardada(), { nombre: NOMBRE, huella: huella() });
+}
+
+/** El menú «Licencia de este equipo…». Devuelve true si se va a reiniciar. */
+function abrirMenu() {
+  const { dialog } = require("electron");
+  const r = resumen();
+  const cual = dialog.showMessageBoxSync({
+    type: r.activa ? "info" : "warning",
+    title: "Licencia",
+    message: r.titulo,
+    detail: r.lineas.join("\n"),
+    buttons: r.activa ? ["Cerrar", "Cambiar de cuenta…"] : ["Cerrar", "Activar ahora…"],
+    defaultId: 0, cancelId: 0, noLink: true,
+  });
+  if (cual !== 1) return false;
+
+  // Se pregunta otra vez porque esto cierra el programa y libera el lugar de
+  // este equipo. Un clic de más vale menos que un taller cerrado sin querer.
+  const seguro = dialog.showMessageBoxSync({
+    type: "question", title: "Cambiar de cuenta",
+    message: "Se va a cerrar nest101 y se abrirá de nuevo para entrar con otra cuenta.",
+    detail: "El lugar de este equipo se libera en la cuenta de ahora. "
+          + "Tus proyectos y tu carpeta de taller no se tocan.",
+    buttons: ["Cancelar", "Cerrar y cambiar"], defaultId: 0, cancelId: 0, noLink: true,
+  });
+  if (seguro !== 1) return false;
+  cambiarDeCuenta();
+  return true;
+}
+
+/** Olvida lo guardado y reinicia para volver a pasar la puerta.
+ *
+ *  Se reinicia en vez de abrir la pantalla encima: la puerta está en el
+ *  arranque, ANTES del motor de cálculo, y volver a pasarla con el programa ya
+ *  abierto dejaría medio programa con la cuenta vieja. Reiniciar es una vuelta
+ *  más larga y no deja estados a medias.
+ */
+function cambiarDeCuenta() {
+  n.olvidar(carpeta());
+  app.relaunch();
+  app.exit(0);
+}
+
+module.exports = { asegurar, huella, guardada, resumen, abrirMenu, cambiarDeCuenta, API, PROGRAMA, NOMBRE };

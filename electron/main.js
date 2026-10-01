@@ -340,6 +340,8 @@ function menu() {
               message: "No se encontró Diagnostico.bat junto a la aplicación." });
           } },
         { type: "separator" },
+        { label: "Licencia de este equipo…", click: () => licencia.abrirMenu() },  // #100
+        { type: "separator" },
         { label: "Carpeta de la instalación", click: () =>
             shell.openPath(path.dirname(app.getPath("exe"))) } ] },
     { label: "Ver", submenu: [

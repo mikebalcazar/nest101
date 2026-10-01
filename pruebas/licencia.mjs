@@ -90,5 +90,73 @@ console.log('\n· la pantalla que se abre');
   rev(!u.toString().includes('token'), 'la dirección no lleva ningún token: una dirección se copia y se queda en registros');
 }
 
+/* #100 — Un mal rato del camino NO le quita la licencia a nadie.
+ *
+ * Esto es lo que más caro cuesta si se hace distinto, y es justo lo que no se
+ * nota probando a mano con buen internet. Antes se preguntaba al revés —todo
+ * lo que no fuera un 5xx contaba como «la suite dice que no»— y estas cinco
+ * situaciones normales borraban la licencia del equipo. Se midieron una por
+ * una antes de cambiarlo.
+ */
+console.log('\n· ruido del camino: la licencia guardada no se toca');
+{
+  const respuesta = (status, cuerpo, esJson = true) => async () => ({
+    ok: status >= 200 && status < 300, status,
+    json: async () => { if (!esJson) throw new Error('vino HTML, no JSON'); return cuerpo; },
+  });
+  const caso = async (texto, traer) => {
+    const a = dir();
+    n.guardar(a, { token: 'viejo', hasta: enDias(30), licencia: 'L-1' });
+    const r = await n.latido({ api: 'https://x', carpeta: a, nombre: 'nest101', d: n.guardada(a), version: '1', traer });
+    // Las dos mitades: que se llame «no se pudo llegar», y que el archivo siga
+    // ahí. Es el llamador quien borra al oír «vencida», así que las dos cosas
+    // tienen que cumplirse para que el taller conserve su programa.
+    rev(!!r.sinRed && n.guardada(a)?.token === 'viejo', texto);
+  };
+  await caso('429: tres equipos del taller abriendo a la vez', respuesta(429, { error: 'rate_limited' }));
+  await caso('408: se agotó el tiempo', respuesta(408, null));
+  await caso('401 del proxy de la empresa, que no es la suite', respuesta(401, null));
+  await caso('404 el día que cambie una dirección', respuesta(404, null));
+  await caso('200 con la página de «acceso bloqueado» de un proxy', respuesta(200, null, false));
+  await caso('un motivo que la suite invente mañana', respuesta(403, { error: 'algo_que_no_conozco' }));
+}
+
+console.log('\n· y un «no» de verdad sí cierra, con sus palabras');
+{
+  for (const motivo of ['sin_pago', 'suspendida', 'maquina_desconocida', 'licencia_desconocida', 'token_invalido']) {
+    const a = dir();
+    n.guardar(a, { token: 'viejo', hasta: enDias(30) });
+    const traer = async () => ({ ok: false, status: 403, json: async () => ({ error: motivo }) });
+    const r = await n.latido({ api: 'https://x', carpeta: a, nombre: 'nest101', d: n.guardada(a), version: '1', traer });
+    rev(!!r.vencida && typeof r.porque === 'string' && r.porque.length > 10, motivo, r.porque);
+  }
+}
+
+/* #100 — «¿Con qué cuenta estoy?», que antes no se podía contestar sin ir a
+ * buscar un archivo dentro de AppData. */
+console.log('\n· lo que enseña el menú Licencia');
+{
+  const ahora = Date.parse('2026-09-19T12:00:00Z');
+  const ver = (d) => n.resumen(d, { nombre: 'nest101', huella: 'abcdefgh1234567890', ahora });
+
+  const viva = ver({ token: 't', correo: 'mike@forespot.com', licencia: 'L-77', hasta: '2026-10-29T12:00:00Z' });
+  rev(viva.activa, 'con licencia vigente dice que está activado');
+  rev(viva.lineas.some((l) => l.includes('mike@forespot.com')), 'y con qué cuenta');
+  rev(viva.lineas.some((l) => l.includes('faltan 40 días')), 'y cuántos días le quedan', viva.lineas[2]);
+
+  const manana = ver({ token: 't', hasta: '2026-09-20T12:00:00Z' });
+  rev(manana.lineas.some((l) => l.includes('falta 1 día')), 'un solo día se dice en singular', manana.lineas[2]);
+
+  const muerta = ver({ token: 't', correo: 'x@y.z', licencia: 'L-9', hasta: '2026-09-01T12:00:00Z' });
+  rev(!muerta.activa && muerta.titulo.includes('venció'), 'vencida lo dice, y no ofrece cambiar de cuenta');
+
+  const nada = ver(null);
+  rev(!nada.activa && nada.titulo.includes('no está activado'), 'sin activar también se puede abrir el menú');
+
+  const todo = [viva, manana, muerta, nada].flatMap((r) => [r.titulo, ...r.lineas]).join(' ');
+  rev(!todo.includes('abcdefgh1234567890'), 'la huella sale cortada, no entera');
+  rev(!/token|t\b'/.test(todo.replace(/nest101/g, '')), 'y el token no se enseña en ninguna parte');
+}
+
 console.log(`\n${fallas ? `${fallas} FALLA${fallas > 1 ? 'S' : ''}` : 'todo bien'} · ${revisadas - fallas} de ${revisadas} pasaron\n`);
 process.exit(fallas ? 1 : 0);

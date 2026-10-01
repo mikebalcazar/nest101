@@ -15,7 +15,11 @@ const crypto = require("crypto");
 
 const API_POR_OMISION = "https://suite101-api.mike-929.workers.dev";
 
-/** Los motivos por los que la suite dice que no, con palabras. */
+/** Los motivos por los que la suite dice que no, con palabras.
+ *
+ *  Esta lista es además la REGLA: sólo un motivo que esté aquí cuenta como
+ *  «la suite dice que no». Ver `esUnNo()`.
+ */
 const porque = (nombre) => ({
   sin_pago: `La licencia de ${nombre} de esta cuenta no está al corriente.`,
   suspendida: `La licencia de ${nombre} de esta cuenta está suspendida.`,
@@ -94,8 +98,77 @@ async function latido({ api, carpeta, nombre, d, version, traer = fetch }) {
     guardar(carpeta, { ...d, token: cuerpo.data.token, hasta: cuerpo.data.hasta, licencia: cuerpo.data.licencia });
     return { ok: true };
   }
-  if (r.status >= 500) return { sinRed: true };
-  return { vencida: true, porque: porque(nombre)[cuerpo?.error] || `La suite no aceptó la licencia (${cuerpo?.error || r.status}).` };
+  if (!esUnNo(cuerpo)) return { sinRed: true };                      // #100
+  return { vencida: true, porque: porque(nombre)[cuerpo.error] };
+}
+
+/** ¿Esto es de verdad un «no» de la suite, o es ruido del camino?  (#100)
+ *
+ *  Antes se preguntaba al revés: todo lo que no fuera un 5xx se contaba como
+ *  «la suite dice que no», y eso borraba la licencia del equipo. Medido, cinco
+ *  situaciones normales la borraban:
+ *
+ *    429  demasiadas peticiones — tres equipos del taller abriendo a la vez
+ *    408  se agotó el tiempo
+ *    401  del proxy de la empresa, no de la suite
+ *    404  el día que cambie una dirección
+ *    200  con una página HTML de «acceso bloqueado» de un proxy corporativo
+ *
+ *  Ninguna quiere decir que la licencia esté mal, y todas dejaban al taller
+ *  con la app pidiendo activarse otra vez. El recado de Jr. lo avisaba: «un
+ *  mal rato del servidor deja a un taller sin su programa, y no se nota
+ *  probando a mano con buen internet».
+ *
+ *  Así que ahora es lista blanca: la suite dice que no cuando contesta un JSON
+ *  con un motivo que conocemos. Todo lo demás es «no se pudo llegar», y la
+ *  licencia guardada no se toca.
+ *
+ *  Un motivo nuevo que la suite invente mañana caería aquí como «no se pudo
+ *  llegar», y es el lado correcto para equivocarse: el token trae su propio
+ *  `hasta` firmado, así que la cosa se cierra sola cuando venza. Al revés —
+ *  cerrarle a un taller que sí pagó— no se arregla solo.
+ */
+function esUnNo(cuerpo) {
+  const motivo = cuerpo && typeof cuerpo.error === "string" ? cuerpo.error : "";
+  return Object.prototype.hasOwnProperty.call(porque(""), motivo);
+}
+
+/** Lo que se le enseña a la persona cuando pregunta «¿con qué cuenta estoy?».
+ *  (#100)
+ *
+ *  Hacía falta una manera de verlo y de cambiarlo desde la propia app. Sin
+ *  esto, la única forma de pasar la licencia a otra cuenta era borrar a mano
+ *  un archivo dentro de AppData, y eso no se le pide a nadie.
+ *
+ *  Va aquí, y no en la ventana, para poder medir el texto sin abrir Electron.
+ *  `ahora` entra como parámetro por lo mismo: una prueba no puede depender de
+ *  qué día se corra.
+ */
+function resumen(d, { nombre, huella: h, ahora = Date.now() } = {}) {
+  const equipo = h ? `${String(h).slice(0, 8)}…` : "—";
+  if (!d) {
+    return { activa: false, titulo: `${nombre} no está activado en este equipo`,
+             lineas: ["Se activa al abrir la aplicación.", `Equipo: ${equipo}`] };
+  }
+  const t = d.hasta ? Date.parse(d.hasta) : NaN;
+  const vigente = Number.isFinite(t) && t > ahora;
+  // Los días se cuentan hacia arriba: si faltan 29 horas, faltan 2 días, no 1.
+  // Decir de menos preocupa sin motivo; decir de más es mentir.
+  const dias = Number.isFinite(t) ? Math.ceil((t - ahora) / 86400000) : null;
+  const cuando = !Number.isFinite(t) ? "sin fecha"
+    : vigente ? `${new Date(t).toLocaleDateString("es-MX")} (${dias === 1 ? "falta 1 día" : `faltan ${dias} días`})`
+    : `venció el ${new Date(t).toLocaleDateString("es-MX")}`;
+  return {
+    activa: vigente,
+    titulo: vigente ? `${nombre} está activado en este equipo`
+                    : `La licencia de ${nombre} venció en este equipo`,
+    lineas: [
+      `Cuenta: ${d.correo || "—"}`,
+      `Licencia: ${d.licencia || "—"}`,
+      `Válida hasta: ${cuando}`,
+      `Equipo: ${equipo}`,
+    ],
+  };
 }
 
 /** La dirección de la pantalla que abre la app. Se arma aquí para poder
@@ -110,4 +183,4 @@ function direccionDeLaPantalla({ api, programa, nombre, huella: h, version, avis
   return u.toString();
 }
 
-module.exports = { API_POR_OMISION, huella, guardada, guardar, olvidar, alCorriente, latido, porque, direccionDeLaPantalla, archivoLicencia };
+module.exports = { API_POR_OMISION, huella, guardada, guardar, olvidar, alCorriente, latido, porque, esUnNo, resumen, direccionDeLaPantalla, archivoLicencia };
