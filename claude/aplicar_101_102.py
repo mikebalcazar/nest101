@@ -7,9 +7,16 @@ es justo la clase de cosa que mete un error que nadie buscaría—. Así que lo 
 viaja es el cambio, no el archivo: cada reemplazo lleva su ancla, y si una ancla
 no aparece **exactamente una vez** esto se detiene sin tocar nada.
 
-Lo corre `.github/workflows/aplicar.yml`, que después corre `verificar.py` y
-sólo entonces hace el commit. El flujo borra este archivo y se borra a sí mismo
-en ese mismo commit, así que en la rama queda únicamente el cambio de verdad.
+Cada cambio lleva además una **firma**: un trozo corto que, si ya está en el
+archivo, significa que el cambio está puesto. La primera versión preguntaba si
+el texto nuevo completo estaba, y eso se rompió solo: `core/proyecto.py` recibió
+después el filtro del zoclo (#103) y ni el texto nuevo ni el ancla volvieron a
+coincidir palabra por palabra, así que el aplicador se detuvo con «el ancla
+aparece 0 veces» sobre un cambio que ya estaba hecho. Una firma corta sobrevive
+a que el vecindario cambie; un bloque de treinta líneas no.
+
+Lo corre el mandadero (ver `claude/ultimo-mandado.md`), que después mide con
+`verificar.py` y sólo entonces hace el commit.
 """
 
 from __future__ import annotations
@@ -19,11 +26,11 @@ import sys
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 
-CAMBIOS: list[tuple[str, str, str]] = []
+CAMBIOS: list[tuple[str, str, str, str]] = []
 
 
-def cambio(archivo: str, viejo: str, nuevo: str) -> None:
-    CAMBIOS.append((archivo, viejo, nuevo))
+def cambio(archivo: str, viejo: str, nuevo: str, firma: str) -> None:
+    CAMBIOS.append((archivo, viejo, nuevo, firma))
 
 
 # ------------------------------------------------------------------ #102 motor
@@ -42,9 +49,15 @@ cambio(
             total = float(g.alto_cuerpo)
         else:
             total = float(g.alto) - ec
-""")
+""",
+    'if d == "total" and g.alto_cuerpo:')
 
 # --------------------------------------------------------------- #102 el saneo
+#
+# Los dos cambios de `core/proyecto.py` ya están en `main` (llegaron por el
+# conector, que sí puede con un archivo de 12 KB). Se quedan aquí con su firma
+# para que el aplicador lo diga en voz alta en vez de callar, y para que siga
+# sirviendo sobre un árbol viejo.
 cambio(
     "core/proyecto.py",
     """from .nesting import nestear, Hoja
@@ -89,7 +102,8 @@ def _sanear_alto_cuerpo(g: Gabinete, std: Estandar) -> bool:
 
 
 @dataclass
-class Proyecto:''')
+class Proyecto:''',
+    "def _sanear_alto_cuerpo(")
 
 cambio(
     "core/proyecto.py",
@@ -101,7 +115,8 @@ cambio(
             std_g = self.estandar_de(g)
             _sanear_alto_cuerpo(g, std_g)
             try:
-                total, cuerpo, hz = alturas(g, std_g)""")
+                total, cuerpo, hz = alturas(g, std_g)""",
+    "            _sanear_alto_cuerpo(g, std_g)")
 
 # ------------------------------------------------------- #101 el PDF de planos
 cambio(
@@ -117,7 +132,8 @@ _SERIE = itertools.count(1)
 
 
 def _iso_en_pagina(c, solidos, x_pt, y_pt, w_pt, h_pt, tmpdir, nombre,
-                   etiquetas=False, ancho_px=2400):""")
+                   etiquetas=False, ancho_px=2400):""",
+    "_SERIE = itertools.count(1)")
 
 cambio(
     "export/pdf.py",
@@ -131,7 +147,8 @@ cambio(
     # (`iso_cocina.png`) era fijo para todos los muebles. Lo reportó Mike:
     # «me coloca la misma imagen isométrica del primero en todos».
     ruta = os.path.join(tmpdir, f"{next(_SERIE):04d}_{nombre}")
-    im.save(ruta, "PNG")""")
+    im.save(ruta, "PNG")""",
+    'f"{next(_SERIE):04d}_{nombre}"')
 
 # ---------------------------------------------------------- #102 la captura
 cambio(
@@ -161,19 +178,20 @@ cambio(
     g.alto = t; g.alto_cuerpo = c; g.altura_zoclo = t - ec - c;
   } else {                        // "cuerpo": capturas total + zoclo
     g.alto = t; g.altura_zoclo = z; g.alto_cuerpo = t - ec - z;
-  }""")
+  }""",
+    "  const ec = espesorCubierta(g);\n  if (!hay) {")
 
 
 def main() -> int:
     errores = []
-    for archivo, viejo, nuevo in CAMBIOS:
+    for archivo, viejo, nuevo, firma in CAMBIOS:
         ruta = RAIZ / archivo
         if not ruta.exists():
             errores.append(f"{archivo}: no existe")
             continue
         texto = ruta.read_text(encoding="utf-8")
-        if nuevo in texto:
-            print(f"  ya estaba  {archivo}")
+        if firma in texto:
+            print(f"  ya estaba  {archivo}  ({firma.strip()[:40]})")
             continue
         veces = texto.count(viejo)
         if veces != 1:
