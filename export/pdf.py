@@ -85,6 +85,14 @@ def _vistas_gabinete(c, g: Gabinete, std: Estandar, x0, y0, esc):
     c.rect(xp + S(g.ancho - e), y0, S(e), S(g.prof))
 
 
+import itertools
+
+# Un número de serie por isométrico renderizado. Ver #101 dentro de
+# `_iso_en_pagina`: dos imágenes distintas no pueden compartir nombre de
+# archivo, o reportlab pone la primera en las dos páginas.
+_SERIE = itertools.count(1)
+
+
 def _iso_en_pagina(c, solidos, x_pt, y_pt, w_pt, h_pt, tmpdir, nombre,
                    etiquetas=False, ancho_px=2400):
     """Renderiza el isométrico con z-buffer y lo coloca en la página.
@@ -93,7 +101,14 @@ def _iso_en_pagina(c, solidos, x_pt, y_pt, w_pt, h_pt, tmpdir, nombre,
     from core import render as R
     im = R.render(solidos, ancho_px=ancho_px)
     esc, alto_px, a_px = R.encuadre(solidos, ancho_px=ancho_px)
-    ruta = os.path.join(tmpdir, nombre)
+    # #101 — el archivo lleva un número de serie propio. reportlab guarda las
+    # imágenes **por nombre de archivo** y reutiliza la primera: al exportar el
+    # proyecto entero, dos muebles con un gabinete del mismo nombre daban la
+    # misma ruta (`iso_Gabinete_1_arm.png`) y el segundo salía con el
+    # isométrico del primero. La página de conjunto era peor: su nombre
+    # (`iso_cocina.png`) era fijo para todos los muebles. Lo reportó Mike:
+    # «me coloca la misma imagen isométrica del primero en todos».
+    ruta = os.path.join(tmpdir, f"{next(_SERIE):04d}_{nombre}")
     im.save(ruta, "PNG")
 
     k = min(w_pt / im.size[0], h_pt / im.size[1])

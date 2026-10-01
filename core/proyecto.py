@@ -9,6 +9,39 @@ from .pieza import agrupar, Pieza
 from .nesting import nestear, Hoja
 
 
+def _sanear_alto_cuerpo(g: Gabinete, std: Estandar) -> bool:
+    """#102 — cura el `alto_cuerpo` que quedó valiendo la altura TOTAL.
+
+    Hasta la 0.18.2 la pantalla del gabinete escribía `alto_cuerpo = alto` en
+    los muebles sin zoclo y no descontaba la plancha en los demás. Con el
+    candado en «total» ese número se vuelve el cuerpo, y entonces el costado de
+    la lista de corte sale con la altura total: nadie le resta el zoclo. Mike lo
+    vio en los PDF de corte.
+
+    El arreglo de la captura no repara los archivos ya guardados, y esos son los
+    que están en el taller. Aquí se detecta el dato imposible —un cuerpo que no
+    deja lugar al zoclo dentro del total declarado— y se vuelve a derivar.
+    Idempotente: una vez curado no vuelve a entrar.
+    """
+    if not (g.tipo == "base" and g.con_zoclo):
+        return False
+    if (g.alto_derivado or "cuerpo").lower() != "total" or g.alto_cuerpo is None:
+        return False
+    hz = float(g.altura_zoclo if g.altura_zoclo is not None else std.altura_zoclo)
+    if hz <= 0:
+        return False
+    # **Sólo la firma exacta del defecto**: `alto_cuerpo` idéntico al alto
+    # declarado, que es lo que escribía `g.alto_cuerpo = g.alto`. Un cuerpo
+    # grande capturado a mano es legítimo —con este candado el total se deriva
+    # de cuerpo + zoclo y sube— y no se toca. La primera versión de este saneo
+    # curaba por «no cabe en el total» y se llevaba esos casos buenos: lo cazó
+    # la comprobación de que normalizar corrige el total sucio a 950.
+    if abs(float(g.alto_cuerpo) - float(g.alto)) > 0.05:
+        return False
+    g.alto_cuerpo = round(float(g.alto) - espesor_cubierta(g, std) - hz, 1)
+    return True
+
+
 @dataclass
 class Proyecto:
     nombre: str = "Proyecto sin nombre"
@@ -71,6 +104,7 @@ class Proyecto:
         """
         for g in self.gabinetes:
             std_g = self.estandar_de(g)
+            _sanear_alto_cuerpo(g, std_g)
             try:
                 total, cuerpo, hz = alturas(g, std_g)
             except AlturaInvalida:
