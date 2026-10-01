@@ -1,0 +1,260 @@
+diff --git a/electron/licencia-nucleo.js b/electron/licencia-nucleo.js
+index 9847a3f..cb27102 100644
+--- a/electron/licencia-nucleo.js
++++ b/electron/licencia-nucleo.js
+@@ -15,7 +15,11 @@ const crypto = require("crypto");
+ 
+ const API_POR_OMISION = "https://suite101-api.mike-929.workers.dev";
+ 
+-/** Los motivos por los que la suite dice que no, con palabras. */
++/** Los motivos por los que la suite dice que no, con palabras.
++ *
++ *  Esta lista es además la REGLA: sólo un motivo que esté aquí cuenta como
++ *  «la suite dice que no». Ver `esUnNo()`.
++ */
+ const porque = (nombre) => ({
+   sin_pago: `La licencia de ${nombre} de esta cuenta no está al corriente.`,
+   suspendida: `La licencia de ${nombre} de esta cuenta está suspendida.`,
+@@ -94,8 +98,77 @@ async function latido({ api, carpeta, nombre, d, version, traer = fetch }) {
+     guardar(carpeta, { ...d, token: cuerpo.data.token, hasta: cuerpo.data.hasta, licencia: cuerpo.data.licencia });
+     return { ok: true };
+   }
+-  if (r.status >= 500) return { sinRed: true };
+-  return { vencida: true, porque: porque(nombre)[cuerpo?.error] || `La suite no aceptó la licencia (${cuerpo?.error || r.status}).` };
++  if (!esUnNo(cuerpo)) return { sinRed: true };                      // #100
++  return { vencida: true, porque: porque(nombre)[cuerpo.error] };
++}
++
++/** ¿Esto es de verdad un «no» de la suite, o es ruido del camino?  (#100)
++ *
++ *  Antes se preguntaba al revés: todo lo que no fuera un 5xx se contaba como
++ *  «la suite dice que no», y eso borraba la licencia del equipo. Medido, cinco
++ *  situaciones normales la borraban:
++ *
++ *    429  demasiadas peticiones — tres equipos del taller abriendo a la vez
++ *    408  se agotó el tiempo
++ *    401  del proxy de la empresa, no de la suite
++ *    404  el día que cambie una dirección
++ *    200  con una página HTML de «acceso bloqueado» de un proxy corporativo
++ *
++ *  Ninguna quiere decir que la licencia esté mal, y todas dejaban al taller
++ *  con la app pidiendo activarse otra vez. El recado de Jr. lo avisaba: «un
++ *  mal rato del servidor deja a un taller sin su programa, y no se nota
++ *  probando a mano con buen internet».
++ *
++ *  Así que ahora es lista blanca: la suite dice que no cuando contesta un JSON
++ *  con un motivo que conocemos. Todo lo demás es «no se pudo llegar», y la
++ *  licencia guardada no se toca.
++ *
++ *  Un motivo nuevo que la suite invente mañana caería aquí como «no se pudo
++ *  llegar», y es el lado correcto para equivocarse: el token trae su propio
++ *  `hasta` firmado, así que la cosa se cierra sola cuando venza. Al revés —
++ *  cerrarle a un taller que sí pagó— no se arregla solo.
++ */
++function esUnNo(cuerpo) {
++  const motivo = cuerpo && typeof cuerpo.error === "string" ? cuerpo.error : "";
++  return Object.prototype.hasOwnProperty.call(porque(""), motivo);
++}
++
++/** Lo que se le enseña a la persona cuando pregunta «¿con qué cuenta estoy?».
++ *  (#100)
++ *
++ *  Hacía falta una manera de verlo y de cambiarlo desde la propia app. Sin
++ *  esto, la única forma de pasar la licencia a otra cuenta era borrar a mano
++ *  un archivo dentro de AppData, y eso no se le pide a nadie.
++ *
++ *  Va aquí, y no en la ventana, para poder medir el texto sin abrir Electron.
++ *  `ahora` entra como parámetro por lo mismo: una prueba no puede depender de
++ *  qué día se corra.
++ */
++function resumen(d, { nombre, huella: h, ahora = Date.now() } = {}) {
++  const equipo = h ? `${String(h).slice(0, 8)}…` : "—";
++  if (!d) {
++    return { activa: false, titulo: `${nombre} no está activado en este equipo`,
++             lineas: ["Se activa al abrir la aplicación.", `Equipo: ${equipo}`] };
++  }
++  const t = d.hasta ? Date.parse(d.hasta) : NaN;
++  const vigente = Number.isFinite(t) && t > ahora;
++  // Los días se cuentan hacia arriba: si faltan 29 horas, faltan 2 días, no 1.
++  // Decir de menos preocupa sin motivo; decir de más es mentir.
++  const dias = Number.isFinite(t) ? Math.ceil((t - ahora) / 86400000) : null;
++  const cuando = !Number.isFinite(t) ? "sin fecha"
++    : vigente ? `${new Date(t).toLocaleDateString("es-MX")} (${dias === 1 ? "falta 1 día" : `faltan ${dias} días`})`
++    : `venció el ${new Date(t).toLocaleDateString("es-MX")}`;
++  return {
++    activa: vigente,
++    titulo: vigente ? `${nombre} está activado en este equipo`
++                    : `La licencia de ${nombre} venció en este equipo`,
++    lineas: [
++      `Cuenta: ${d.correo || "—"}`,
++      `Licencia: ${d.licencia || "—"}`,
++      `Válida hasta: ${cuando}`,
++      `Equipo: ${equipo}`,
++    ],
++  };
+ }
+ 
+ /** La dirección de la pantalla que abre la app. Se arma aquí para poder
+@@ -110,4 +183,4 @@ function direccionDeLaPantalla({ api, programa, nombre, huella: h, version, avis
+   return u.toString();
+ }
+ 
+-module.exports = { API_POR_OMISION, huella, guardada, guardar, olvidar, alCorriente, latido, porque, direccionDeLaPantalla, archivoLicencia };
++module.exports = { API_POR_OMISION, huella, guardada, guardar, olvidar, alCorriente, latido, porque, esUnNo, resumen, direccionDeLaPantalla, archivoLicencia };
+diff --git a/electron/licencia.js b/electron/licencia.js
+index a7400b0..40adba3 100644
+--- a/electron/licencia.js
++++ b/electron/licencia.js
+@@ -99,4 +99,60 @@ async function asegurar({ version, avisar } = {}) {
+   return pedirEnPantalla(version);
+ }
+ 
+-module.exports = { asegurar, huella, guardada, API, PROGRAMA, NOMBRE };
++/* #100 — «¿Con qué cuenta estoy?», y poder cambiarla.
++ *
++ * Faltaba: una vez activado, no había manera de ver con qué correo quedó el
++ * equipo ni hasta cuándo, y la única forma de pasarlo a otra cuenta era
++ * borrar a mano un archivo dentro de AppData. Eso no se le pide a nadie.
++ *
++ * El diálogo vive aquí y no en `main.js` a propósito: `main.js` ya lleva el
++ * arranque, el backend, el menú y los avisos, y esto es de la licencia. Desde
++ * allá se llama con un renglón. El texto que se enseña se arma en el núcleo,
++ * para poder medirlo sin abrir una ventana.
++ */
++function resumen() {
++  return n.resumen(guardada(), { nombre: NOMBRE, huella: huella() });
++}
++
++/** El menú «Licencia de este equipo…». Devuelve true si se va a reiniciar. */
++function abrirMenu() {
++  const { dialog } = require("electron");
++  const r = resumen();
++  const cual = dialog.showMessageBoxSync({
++    type: r.activa ? "info" : "warning",
++    title: "Licencia",
++    message: r.titulo,
++    detail: r.lineas.join("\n"),
++    buttons: r.activa ? ["Cerrar", "Cambiar de cuenta…"] : ["Cerrar", "Activar ahora…"],
++    defaultId: 0, cancelId: 0, noLink: true,
++  });
++  if (cual !== 1) return false;
++
++  // Se pregunta otra vez porque esto cierra el programa y libera el lugar de
++  // este equipo. Un clic de más vale menos que un taller cerrado sin querer.
++  const seguro = dialog.showMessageBoxSync({
++    type: "question", title: "Cambiar de cuenta",
++    message: "Se va a cerrar nest101 y se abrirá de nuevo para entrar con otra cuenta.",
++    detail: "El lugar de este equipo se libera en la cuenta de ahora. "
++          + "Tus proyectos y tu carpeta de taller no se tocan.",
++    buttons: ["Cancelar", "Cerrar y cambiar"], defaultId: 0, cancelId: 0, noLink: true,
++  });
++  if (seguro !== 1) return false;
++  cambiarDeCuenta();
++  return true;
++}
++
++/** Olvida lo guardado y reinicia para volver a pasar la puerta.
++ *
++ *  Se reinicia en vez de abrir la pantalla encima: la puerta está en el
++ *  arranque, ANTES del motor de cálculo, y volver a pasarla con el programa ya
++ *  abierto dejaría medio programa con la cuenta vieja. Reiniciar es una vuelta
++ *  más larga y no deja estados a medias.
++ */
++function cambiarDeCuenta() {
++  n.olvidar(carpeta());
++  app.relaunch();
++  app.exit(0);
++}
++
++module.exports = { asegurar, huella, guardada, resumen, abrirMenu, cambiarDeCuenta, API, PROGRAMA, NOMBRE };
+diff --git a/electron/main.js b/electron/main.js
+index 0f622f5..757a79e 100644
+--- a/electron/main.js
++++ b/electron/main.js
+@@ -340,6 +340,8 @@ function menu() {
+               message: "No se encontró Diagnostico.bat junto a la aplicación." });
+           } },
+         { type: "separator" },
++        { label: "Licencia de este equipo…", click: () => licencia.abrirMenu() },  // #100
++        { type: "separator" },
+         { label: "Carpeta de la instalación", click: () =>
+             shell.openPath(path.dirname(app.getPath("exe"))) } ] },
+     { label: "Ver", submenu: [
+diff --git a/pruebas/licencia.mjs b/pruebas/licencia.mjs
+index 7811428..3cec681 100644
+--- a/pruebas/licencia.mjs
++++ b/pruebas/licencia.mjs
+@@ -90,5 +90,73 @@ console.log('\n· la pantalla que se abre');
+   rev(!u.toString().includes('token'), 'la dirección no lleva ningún token: una dirección se copia y se queda en registros');
+ }
+ 
++/* #100 — Un mal rato del camino NO le quita la licencia a nadie.
++ *
++ * Esto es lo que más caro cuesta si se hace distinto, y es justo lo que no se
++ * nota probando a mano con buen internet. Antes se preguntaba al revés —todo
++ * lo que no fuera un 5xx contaba como «la suite dice que no»— y estas cinco
++ * situaciones normales borraban la licencia del equipo. Se midieron una por
++ * una antes de cambiarlo.
++ */
++console.log('\n· ruido del camino: la licencia guardada no se toca');
++{
++  const respuesta = (status, cuerpo, esJson = true) => async () => ({
++    ok: status >= 200 && status < 300, status,
++    json: async () => { if (!esJson) throw new Error('vino HTML, no JSON'); return cuerpo; },
++  });
++  const caso = async (texto, traer) => {
++    const a = dir();
++    n.guardar(a, { token: 'viejo', hasta: enDias(30), licencia: 'L-1' });
++    const r = await n.latido({ api: 'https://x', carpeta: a, nombre: 'nest101', d: n.guardada(a), version: '1', traer });
++    // Las dos mitades: que se llame «no se pudo llegar», y que el archivo siga
++    // ahí. Es el llamador quien borra al oír «vencida», así que las dos cosas
++    // tienen que cumplirse para que el taller conserve su programa.
++    rev(!!r.sinRed && n.guardada(a)?.token === 'viejo', texto);
++  };
++  await caso('429: tres equipos del taller abriendo a la vez', respuesta(429, { error: 'rate_limited' }));
++  await caso('408: se agotó el tiempo', respuesta(408, null));
++  await caso('401 del proxy de la empresa, que no es la suite', respuesta(401, null));
++  await caso('404 el día que cambie una dirección', respuesta(404, null));
++  await caso('200 con la página de «acceso bloqueado» de un proxy', respuesta(200, null, false));
++  await caso('un motivo que la suite invente mañana', respuesta(403, { error: 'algo_que_no_conozco' }));
++}
++
++console.log('\n· y un «no» de verdad sí cierra, con sus palabras');
++{
++  for (const motivo of ['sin_pago', 'suspendida', 'maquina_desconocida', 'licencia_desconocida', 'token_invalido']) {
++    const a = dir();
++    n.guardar(a, { token: 'viejo', hasta: enDias(30) });
++    const traer = async () => ({ ok: false, status: 403, json: async () => ({ error: motivo }) });
++    const r = await n.latido({ api: 'https://x', carpeta: a, nombre: 'nest101', d: n.guardada(a), version: '1', traer });
++    rev(!!r.vencida && typeof r.porque === 'string' && r.porque.length > 10, motivo, r.porque);
++  }
++}
++
++/* #100 — «¿Con qué cuenta estoy?», que antes no se podía contestar sin ir a
++ * buscar un archivo dentro de AppData. */
++console.log('\n· lo que enseña el menú Licencia');
++{
++  const ahora = Date.parse('2026-09-19T12:00:00Z');
++  const ver = (d) => n.resumen(d, { nombre: 'nest101', huella: 'abcdefgh1234567890', ahora });
++
++  const viva = ver({ token: 't', correo: 'mike@forespot.com', licencia: 'L-77', hasta: '2026-10-29T12:00:00Z' });
++  rev(viva.activa, 'con licencia vigente dice que está activado');
++  rev(viva.lineas.some((l) => l.includes('mike@forespot.com')), 'y con qué cuenta');
++  rev(viva.lineas.some((l) => l.includes('faltan 40 días')), 'y cuántos días le quedan', viva.lineas[2]);
++
++  const manana = ver({ token: 't', hasta: '2026-09-20T12:00:00Z' });
++  rev(manana.lineas.some((l) => l.includes('falta 1 día')), 'un solo día se dice en singular', manana.lineas[2]);
++
++  const muerta = ver({ token: 't', correo: 'x@y.z', licencia: 'L-9', hasta: '2026-09-01T12:00:00Z' });
++  rev(!muerta.activa && muerta.titulo.includes('venció'), 'vencida lo dice, y no ofrece cambiar de cuenta');
++
++  const nada = ver(null);
++  rev(!nada.activa && nada.titulo.includes('no está activado'), 'sin activar también se puede abrir el menú');
++
++  const todo = [viva, manana, muerta, nada].flatMap((r) => [r.titulo, ...r.lineas]).join(' ');
++  rev(!todo.includes('abcdefgh1234567890'), 'la huella sale cortada, no entera');
++  rev(!/token|t\b'/.test(todo.replace(/nest101/g, '')), 'y el token no se enseña en ninguna parte');
++}
++
+ console.log(`\n${fallas ? `${fallas} FALLA${fallas > 1 ? 'S' : ''}` : 'todo bien'} · ${revisadas - fallas} de ${revisadas} pasaron\n`);
+ process.exit(fallas ? 1 : 0);
