@@ -42,6 +42,26 @@ def _sanear_alto_cuerpo(g: Gabinete, std: Estandar) -> bool:
     return True
 
 
+def _es_zoclo(p: Pieza) -> bool:
+    """#103 — el zoclo no va al corte.
+
+    Mike, 30-sep-2026: *«cuando se hagan los despieces y cortes no incluyas los
+    zoclos. Los zoclos sólo son para referencia para visualmente ver cómo queda
+    el diseño, pero esos no se hacen en este tipo de despiece»*.
+
+    El filtro vive aquí, en el único sitio por el que pasan **todas** las
+    piezas que salen del programa: de `calcular()` cuelgan la lista de corte,
+    el nesting, el DXF, las fichas, el Excel y el costeo. Una pieza que no sale
+    de aquí no sale de ninguna parte.
+
+    El zoclo sigue existiendo donde sí sirve, y eso es lo que no hay que
+    romper: `alturas()` le resta su altura al cuerpo (#001), así que los
+    costados y el respaldo se cortan a la medida correcta, y `core/iso.py` lo
+    dibuja en el 3D y en los isométricos del plano.
+    """
+    return p.codigo.endswith("ZOC") or "zoclo" in (p.nombre or "").lower()
+
+
 @dataclass
 class Proyecto:
     nombre: str = "Proyecto sin nombre"
@@ -154,7 +174,7 @@ class Proyecto:
         for i, g in enumerate(self.gabinetes, start=1):
             std = self.estandar_de(g)
             pref = str(i)
-            pz = despiezar(g, std, pref)
+            pz = [p for p in despiezar(g, std, pref) if not _es_zoclo(p)]   # #103
             for p in pz:
                 p.cantidad *= max(1, g.cantidad)
             todas += pz
