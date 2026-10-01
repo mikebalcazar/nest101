@@ -741,13 +741,23 @@ function leerAlturas() {
   const c = num($("gAltoCuerpo").value, 0);
   const z = num($("gAlturaZoclo").value, 0);
 
-  if (!hay) { g.alto = d === "total" ? c : t; g.alto_cuerpo = g.alto; return; }
+  // #102 — la plancha entra en todas las cuentas. `g.alto` es el DECLARADO (con
+  // cubierta) y `g.alto_cuerpo` es el cuerpo construido (sin ella): confundirlos
+  // dejaba `alto_cuerpo` valiendo el total, y con el candado en «total» el motor
+  // tomaba ese número como cuerpo y la lista de corte salía con la altura total,
+  // sin restar el zoclo. Lo reportó Mike: «en los cortes reinterpreta la altura
+  // total como la altura del gabinete, no le resta la altura del zoclo».
+  const ec = espesorCubierta(g);
+  if (!hay) {
+    const decl = d === "total" ? c + ec : t;
+    g.alto = decl; g.alto_cuerpo = decl - ec; return;
+  }
   if (d === "total") {            // capturas cuerpo + zoclo
-    g.alto_cuerpo = c; g.altura_zoclo = z; g.alto = c + z;
+    g.alto_cuerpo = c; g.altura_zoclo = z; g.alto = c + z + ec;
   } else if (d === "zoclo") {     // capturas total + cuerpo
-    g.alto = t; g.alto_cuerpo = c; g.altura_zoclo = t - c;
+    g.alto = t; g.alto_cuerpo = c; g.altura_zoclo = t - ec - c;
   } else {                        // "cuerpo": capturas total + zoclo
-    g.alto = t; g.altura_zoclo = z; g.alto_cuerpo = t - z;
+    g.alto = t; g.altura_zoclo = z; g.alto_cuerpo = t - ec - z;
   }
 }
 

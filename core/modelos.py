@@ -178,8 +178,14 @@ def alturas(g: Gabinete, std: Estandar):
     ec = espesor_cubierta(g, std)
 
     if not lleva:
-        total = float(g.alto_cuerpo if (d == "total" and g.alto_cuerpo) else g.alto)
-        total -= ec
+        # #102 — con el total derivado, `alto_cuerpo` YA es el cuerpo: quitarle
+        # la plancha otra vez encogía el mueble un espesor en cada recálculo
+        # (20 mm por vez con piedra de 20). Es el mismo defecto de #059, que se
+        # arregló en la rama con zoclo y se quedó vivo en ésta.
+        if d == "total" and g.alto_cuerpo:
+            total = float(g.alto_cuerpo)
+        else:
+            total = float(g.alto) - ec
         if total <= 0:
             raise AlturaInvalida(f"«{g.nombre}»: la altura debe ser mayor que 0")
         return total, total, 0.0
