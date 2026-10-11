@@ -1,0 +1,405 @@
+diff --git a/ui/app.js b/ui/app.js
+index ef3a9af..2d07d47 100644
+--- a/ui/app.js
++++ b/ui/app.js
+@@ -1,3 +1,3 @@
+ import * as THREE from "./vendor/three.module.min.js";
+-import { montarLeerPlano } from "./leer-plano.js";
++import { montarLeerPlano, AYUDA_LLAVE } from "./leer-plano.js";
+ import { ponerIdioma, T, T2 } from "./idioma.js";    // #085
+@@ -17,2 +17,3 @@ const S = {
+   tema: "oscuro",       // #027
++  unidades: "mm",       // #105: sólo cómo se LEEN las medidas en pantalla
+   sub: null,            // #023: {gi, tipo, i} de la sub-pieza seleccionada
+@@ -135,2 +136,3 @@ async function init() {
+   S.presets = d.presets;
++  S.unidades = d.unidades || "mm";     // #105
+   aplicarTema(leerTema(), false);      // #027
+@@ -350,7 +352,3 @@ function cablear() {
+   $("bProyecto").onclick = abrirProyecto;             // #038
+-  $("bLlaveGuardar").onclick = () => guardarLlave($("sLlave").value);   // #040
+-  $("bLlaveQuitar").onclick = () => guardarLlave("");
+-  $("sLlave").onkeydown = (e) => {
+-    if (e.key === "Enter") { e.preventDefault(); guardarLlave($("sLlave").value); }
+-  };
++  $("bIrAjustes").onclick = abrirConfig;                   // #105 (antes #040)
+   $("iProyecto").onclick = abrirProyecto;
+@@ -979,3 +977,3 @@ function fichasDeCategoria() {
+       img: `/api/miniatura/${p.id}.png?w=300`,
+-      nombre: p.nombre, dim: `${p.ancho} × ${p.alto} × ${p.prof} mm`,
++      nombre: p.nombre, dim: medidas(p.ancho, p.alto, p.prof),
+       badge: /aereo|nicho$/.test(p.id) ? "aéreo" : "",
+@@ -991,3 +989,3 @@ function fichasDeCategoria() {
+         img: `/api/miniatura/biblioteca/${m.id}.png?w=300`,
+-        nombre: m.nombre, dim: `${g.ancho} × ${g.alto} × ${g.prof} mm`,
++        nombre: m.nombre, dim: medidas(g.ancho, g.alto, g.prof),
+         badge: g.tipo === "aereo" ? "aéreo" : "",
+@@ -1004,3 +1002,3 @@ function fichasDeCategoria() {
+       img: `/api/miniatura/modulo/${m.id}.png?w=300`,
+-      nombre: m.nombre, dim: `${g.ancho} × ${g.alto} × ${g.prof} mm`,
++      nombre: m.nombre, dim: medidas(g.ancho, g.alto, g.prof),
+       nota: m.nota, badge: g.tipo === "aereo" ? "aéreo" : "",
+@@ -1211,4 +1209,2 @@ async function pintarLlave() {
+       ? `puesta (${r.pista})` : "sin llave: «Leer plano» no va a poder leer";
+-    $("sLlave").value = "";
+-    $("sLlave").placeholder = r.hay ? "•••••••• (ya hay una)" : "sk-ant-…";
+   } catch { /* backend caído: ya se avisa por otro lado */ }
+@@ -2395,3 +2391,88 @@ function pintarCotas() {
+ }
+-const cm = (mm) => (mm / 10).toFixed(1).replace(/\.0$/, "") + " cm";
++/* ============================================================ #105 · unidades
++   Mike, 11-oct-2026: «un menú de configuración donde se puedan ajustar los
++   varios parámetros de la aplicación… el idioma, las unidades, etc».
++
++   Él escogió el alcance: las unidades cambian **sólo lo que se lee en la
++   pantalla donde se diseña** —las cotas del dibujo y las medidas de la
++   parrilla—. El programa calcula, nesta y cotiza en milímetros siempre, y la
++   lista de corte, los planos y el DXF se quedan en milímetros a propósito:
++   son los que van a la máquina y al carpintero, y una pantalla en pulgadas
++   junto a un papel en milímetros es una hoja echada a perder.
++
++   Las pulgadas se escriben en quebrados de dieciseisavo —35 7/16"— porque así
++   están marcadas las cintas. Un «35.433"» no se puede medir.
++
++   Hasta aquí las cotas estaban en centímetros a fuerza (#022). Quien no toque
++   nada ahora las ve en milímetros, que es lo que trae el archivo; el taller
++   que las quiera en centímetros lo dice una vez en Ajustes. */
++const UNI = {
++  mm:   { nom: "Milímetros", corto: "mm",  ej: "880 mm" },
++  cm:   { nom: "Centímetros", corto: "cm", ej: "88 cm" },
++  pulg: { nom: "Pulgadas", corto: '"',     ej: '34 5/8"' },
++};
++const U = {
++  cual: () => (UNI[S.unidades] ? S.unidades : "mm"),
++  corto: () => UNI[U.cual()].corto,
++
++  /** El número solo, como se teclea en la cajita de la cota. */
++  valor(mm) {
++    const u = U.cual();
++    if (u === "mm") return String(Math.round(mm * 10) / 10).replace(/\.0$/, "");
++    if (u === "cm") return String(Math.round(mm) / 10).replace(/\.0$/, "");
++    return U.quebrado(mm / 25.4);
++  },
++
++  /** El número con su unidad, para leer. */
++  texto(mm) {
++    const u = U.cual();
++    if (u === "pulg") return U.quebrado(mm / 25.4) + '"';
++    return U.valor(mm) + " " + UNI[u].corto;
++  },
++
++  /** Pulgadas a quebrado de dieciseisavo: 902 mm → «35 1/2». */
++  quebrado(p) {
++    const n = Math.round(p * 16);
++    const ent = Math.trunc(n / 16);
++    let num = Math.abs(n % 16), den = 16;
++    while (num && num % 2 === 0) { num /= 2; den /= 2; }
++    if (!num) return String(ent);
++    return (ent ? ent + " " : (n < 0 ? "-" : "")) + num + "/" + den;
++  },
++
++  /** De lo que se tecleó, a milímetros. Acepta «35 7/16», «35-7/16», «35.5».
++   *  Devuelve NaN si no se entiende, para que quien llama no aplique nada. */
++  aMm(txt) {
++    const u = U.cual();
++    const s = String(txt).trim().replace(/["”]/g, "").replace(/\s*-\s*/, " ");
++    if (!s) return NaN;
++    let v = NaN;
++    const q = s.match(/^(\d+(?:\.\d+)?)?\s*(\d+)\s*\/\s*(\d+)$/);
++    if (q) {
++      const d = parseFloat(q[3]);
++      v = (parseFloat(q[1] || "0")) + (d ? parseFloat(q[2]) / d : NaN);
++    } else {
++      v = parseFloat(s.replace(",", "."));
++    }
++    if (!isFinite(v)) return NaN;
++    return u === "mm" ? v : u === "cm" ? v * 10 : v * 25.4;
++  },
++
++  /** Cuánto salta la flechita del teclado. En pulgadas no hay flechita: se
++   *  teclea el quebrado, así que la cajita es de texto. */
++  paso: () => ({ mm: "1", cm: "0.1", pulg: "any" })[U.cual()],
++  tecleo: () => (U.cual() === "pulg" ? "text" : "number"),
++};
++/** Se conserva el nombre viejo: lo usan las cuatro cotas de #022. */
++const cm = (mm) => U.texto(mm);
++
++/** «90 × 88 × 60 cm» — las tres medidas de la parrilla, en la unidad del
++ *  taller y con la unidad escrita una sola vez. Es `function` y no `const`
++ *  porque la parrilla se pinta desde arriba del archivo. */
++function medidas(a, b, c) {
++  // En pulgadas la marca va pegada a cada número —35 7/16" × 34 5/8"— porque
++  // una sola comilla al final, después de tres quebrados, no se lee.
++  if (U.cual() === "pulg") return [a, b, c].map(U.texto).join(" × ");
++  return `${U.valor(a)} × ${U.valor(b)} × ${U.valor(c)} ${U.corto()}`;
++}
+ 
+@@ -2401,5 +2482,9 @@ function editarCota(idx, el) {
+   if (!c || el.querySelector("input")) return;
+-  const antes = (c.valor / 10);
++  // #105 — la cajita se abre en la unidad del taller, no en centímetros a
++  // fuerza. Se compara en MILÍMETROS y no en lo tecleado: en pulgadas el
++  // redondeo a dieciseisavo movería la medida sólo por haber abierto la caja.
++  const antes = c.valor;
+   el.classList.add("editando");
+-  el.innerHTML = `<input type="number" step="0.1" value="${antes}"><span class="u">cm</span>`;
++  el.innerHTML = `<input type="${U.tecleo()}" step="${U.paso()}" `
++               + `value="${U.valor(antes)}"><span class="u">${esc(U.corto())}</span>`;
+   const inp = el.querySelector("input");
+@@ -2412,7 +2497,7 @@ function editarCota(idx, el) {
+     cerrado = true;
+-    const v = parseFloat(inp.value);
++    const v = U.aMm(inp.value);                      // #105 — ya en milímetros
+     el.classList.remove("editando");
+     el.innerHTML = "";
+-    if (aplicar && isFinite(v) && v > 0 && Math.abs(v - antes) > 0.001) {
+-      aplicarCota(c, Math.round(v * 100) / 10);      // cm → mm, a una décima
++    if (aplicar && isFinite(v) && v > 0 && Math.abs(v - antes) > 0.05) {
++      aplicarCota(c, Math.round(v * 10) / 10);        // a una décima de mm
+     } else {
+@@ -3124,3 +3209,6 @@ function instalarAhora(archivo, version) {
+     () => {
+-      if (window.t101?.instalar) window.t101.instalar(archivo);
++      // #105 — el puente de Electron se llama `despz`. Con `t101` esto nunca
++      // fue verdad y «Instalar ahora» caía siempre al navegador, que en
++      // Electron no abre un .exe: el instalador bajado se quedaba ahí.
++      if (window.despz?.instalar) window.despz.instalar(archivo);
+       else abrirEnlace("file:///" + archivo);
+@@ -3131,3 +3219,3 @@ function instalarAhora(archivo, version) {
+ function abrirEnlace(url) {
+-  if (window.t101?.abrirEnlace) { window.t101.abrirEnlace(url); return; }
++  if (window.despz?.abrirEnlace) { window.despz.abrirEnlace(url); return; }   // #105
+   window.open(url, "_blank", "noopener");     // en navegador, durante el desarrollo
+@@ -3165,2 +3253,22 @@ function lineaAct(d) {
+ 
++/* ============================================================ #105 · Ajustes
++   Mike, 11-oct-2026: «no hay ningún lugar donde pueda gestionar el key de
++   Claude. Necesito un menú de configuración donde se puedan ajustar los varios
++   parámetros de la aplicación, incluida la licencia con la que está
++   trabajando, el key, el idioma, las unidades, etc.».
++
++   La llave SÍ existía desde #040 —estaba en la pestaña Estándar, bajo el
++   título «Leer plano»— y la licencia desde #100, en el menú nativo de Ayuda.
++   Que el dueño del programa no las encontrara es el reporte: estaban cada una
++   en el lugar donde se usan, y no hay un lugar donde se *administran*. Aquí se
++   juntan las siete.
++
++   Lo que NO entra, porque Mike lo acotó con botones: nada del mueble abierto.
++   Holguras, materiales, catálogo y módulos siguen en la pestaña Estándar, que
++   es donde se editan mientras se dibuja. Esto es del equipo y de la app.
++
++   Un solo cuadro con secciones, y no pestañas, a propósito: son siete cosas
++   que se tocan una vez en la vida del equipo; buscarlas con el ojo en una
++   lista corta es más rápido que adivinar en cuál pestaña quedó la llave —que
++   es exactamente lo que acaba de pasar. */
+ async function abrirConfig() {
+@@ -3168,4 +3276,11 @@ async function abrirConfig() {
+   let logo = { propio: false, nombre: "", carpeta: "" };
++  let llave = { hay: false, pista: "" };
+   try { idi = await api("/api/idioma"); } catch {}
+   try { logo = await api("/api/logo"); } catch {}
++  try { llave = await api("/api/llave"); } catch {}
++  // La licencia la sabe Electron, no el backend: vive en el archivo del equipo
++  // y la puerta la revisa ANTES de arrancar Python (#100).
++  let lic = null;
++  try { lic = await window.despz?.licencia?.(); } catch {}
++
+   const a = S.actualizacion || {};
+@@ -3173,10 +3288,70 @@ async function abrirConfig() {
+     `<option value="${esc(c)}"${c === idi.activo ? " selected" : ""}>${esc(n)}</option>`).join("");
+-  modal("Configuración general", `
++  // El ejemplo va en la nota de abajo y no dentro del <option>: metido ahí, la
++  // regla de los números del diccionario parte «34 5/8"» en tres y la opción se
++  // queda en español (#098).
++  const opsU = Object.entries(UNI).map(([c, u]) =>
++    `<option value="${esc(c)}"${c === U.cual() ? " selected" : ""}>${esc(u.nom)}</option>`).join("");
++  const unidadesAntes = U.cual();
++
++  const titulo = (t) => `<div style="font-size:11px;font-weight:600;letter-spacing:.04em;
++    text-transform:uppercase;color:var(--txt3);margin:18px 0 8px;
++    border-bottom:1px solid var(--linea2);padding-bottom:4px">${t}</div>`;
++  const nota = (t) => `<div style="font-size:11px;color:var(--txt3);margin:-4px 0 12px">${t}</div>`;
++
++  modal("Ajustes", `
++    ${titulo("Licencia de este equipo")}
++    ${lic ? `
++      <div class="fila"><label>Estado</label>
++        <span style="font-size:12px;color:${lic.activa ? "var(--acc2)" : "var(--warn)"}">
++          ${esc(lic.titulo)}</span></div>
++      ${lic.lineas.map((l) => `<div class="fila"><label></label>
++        <span style="font-size:11px;color:var(--txt2)" data-sin-traducir>${esc(l)}</span></div>`).join("")}
++      <div style="display:flex;gap:6px;margin:6px 0 10px">
++        <button class="gh" id="cLicCambiar">${lic.activa ? "Cambiar de cuenta…" : "Activar ahora…"}</button>
++      </div>
++      ${nota(`Cambiar de cuenta cierra nest101 y lo abre de nuevo para entrar con
++        otra. El lugar de este equipo se libera en la cuenta de ahora; tus
++        proyectos y tu carpeta de taller no se tocan.`)}`
++    : nota(`La licencia se administra desde la aplicación de escritorio. En el
++        navegador no hay equipo que licenciar.`)}
++
++    ${titulo("Llave de Claude")}
++    <div class="fila"><label>Estado</label>
++      <span id="cLlaveEstado" style="font-size:12px;color:${llave.hay ? "var(--acc2)" : "var(--warn)"}">
++        ${llave.hay ? `puesta <span data-sin-traducir>(${esc(llave.pista)})</span>`
++                    : "sin llave: «Leer plano» no va a poder leer"}</span></div>
++    <div class="fila"><label>Pegar otra</label>
++      <input id="cLlave" type="password" autocomplete="off" spellcheck="false"
++             placeholder="${llave.hay ? "•••••••• (ya hay una)" : "sk-ant-…"}"></div>
++    <div class="fila"><label></label>
++      <div style="display:flex;gap:6px;flex-wrap:wrap">
++        <button class="gh" id="cLlaveProbar">Probar</button>
++        <button class="pri" id="cLlaveGuardar">Guardar</button>
++        <button class="gh" id="cLlaveQuitar"${llave.hay ? "" : " disabled"}>Quitar</button>
++        <button class="gh" id="cLlaveAyuda">¿Cómo saco mi llave? →</button>
++      </div></div>
++    <div id="cLlaveMsg" style="font-size:11.5px;min-height:16px;margin:4px 0 0"></div>
++    ${nota(`«Probar» le pregunta a Anthropic si la llave sirve de verdad, con el
++      mismo modelo que lee los planos: cuesta una fracción de centavo y te
++      ahorra descubrirlo a medio plano. La llave no se vuelve a mostrar
++      entera: con los últimos cuatro basta para saber cuál está puesta.`)}
++    <div id="cLlaveAyudaCaja" hidden style="margin:0 0 12px">${AYUDA_LLAVE}</div>
++
++    ${titulo("Idioma y unidades")}
+     <div class="fila"><label>Idioma</label>
+       <select id="cIdioma">${ops}</select></div>
+-    <div style="font-size:11px;color:var(--txt3);margin:-4px 0 12px">
+-      Alcanza la pantalla <b>y el papel</b>: planos, fichas de corte y Excel
+-      salen en el idioma que escojas. Es del taller, no del proyecto.</div>
+-
+-    <div class="fila"><label>Logotipo del papel</label>
++    ${nota(`Alcanza la pantalla <b>y el papel</b>: planos, fichas de corte y Excel
++      salen en el idioma que escojas. Es del taller, no del proyecto.`)}
++    <div class="fila"><label>Unidades</label>
++      <select id="cUnidades">${opsU}</select></div>
++    ${nota(`Un gabinete de 880 mm de alto se lee así: <span data-sin-traducir>${
++      Object.values(UNI).map((u) => u.ej).join(" · ")}</span>`)}
++    ${nota(`Sólo cambia cómo se leen las cotas del dibujo y las medidas de la
++      parrilla. La lista de corte, los planos, el Excel y el DXF se quedan en
++      milímetros a propósito: son los que van a la máquina y al carpintero, y
++      una pantalla en pulgadas junto a un papel en milímetros es una hoja
++      echada a perder.`)}
++
++    ${titulo("Logotipo del papel")}
++    <div class="fila"><label>El que firma</label>
+       <span id="cLogoNom" data-sin-traducir>${esc(logo.propio ? logo.nombre : "nest101")}</span></div>
+@@ -3186,7 +3361,7 @@ async function abrirConfig() {
+     </div>
+-    <div style="font-size:11px;color:var(--txt3);margin:-8px 0 12px">
+-      El que firma planos y fichas. También se cambia con clic derecho sobre el
+-      logotipo de la barra.</div>
++    ${nota(`El que firma planos y fichas. También se cambia con clic derecho sobre
++      el logotipo de la barra.`)}
+ 
+-    <div class="fila"><label>Actualizaciones</label>
++    ${titulo("Actualizaciones")}
++    <div class="fila"><label>Versión</label>
+       <span id="cActNota" style="font-size:11px;color:var(--txt2)">${lineaAct(a)}</span></div>
+@@ -3200,5 +3375,4 @@ async function abrirConfig() {
+       Revisar al arrancar y una vez al día</label>
+-    <div style="font-size:11px;color:var(--txt3);margin:-8px 0 12px">
+-      Se abre en tu navegador y se instala encima de la que tienes. Tus proyectos
+-      y tu carpeta de taller no se tocan.</div>
++    ${nota(`Se baja aquí mismo, se comprueba su huella y se instala encima de la
++      que tienes. Tus proyectos y tu carpeta de taller no se tocan.`)}
+     ${a.hay && a.notas ? `<div style="font-size:11px;color:var(--txt2);margin:-6px 0 12px">
+@@ -3209,8 +3383,24 @@ async function abrirConfig() {
+ 
++    ${titulo("Dónde vive todo")}
+     <div class="fila"><label>Carpeta del taller</label>
+       <span style="font-size:11px;color:var(--txt2)" data-sin-traducir>${esc(logo.carpeta || "")}</span></div>
+-    <div style="font-size:11px;color:var(--txt3)">
+-      Ahí viven tu catálogo de materiales, tus módulos, tu logotipo y tu llave.
+-      Las actualizaciones no la tocan.</div>`,
++    ${nota(`Ahí viven tu catálogo de materiales, tus módulos, tu logotipo y tu
++      llave. Las actualizaciones no la tocan.`)}`,
++    // ---- Guardar: sólo lo que se eligió en una lista. Los botones de cada
++    // sección actúan solos, porque cada uno hace una cosa irreversible o
++    // visible al momento y no debe quedar esperando un «Guardar».
+     async () => {
++      const uni = $("cUnidades")?.value;
++      if (uni && uni !== unidadesAntes) {
++        S.unidades = uni;                     // se ve al instante
++        // Lo que lleva medidas escritas: la lista de muebles, el panel del
++        // seleccionado y las etiquetas de cota sobre el 3D.
++        pintarLista(); pintarGabinete();
++        if (S.cotasGeo) actualizarEtiquetasCota();
++        api("/api/perfil", {
++          method: "PUT", headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({ unidades: uni }),
++        }).then(() => estado(T2("unidades: %s", UNI[uni].nom)))
++          .catch(() => estado("no se pudieron guardar las unidades", true));
++      }
+       const cod = $("cIdioma")?.value;
+@@ -3230,6 +3420,70 @@ async function abrirConfig() {
+     }, "Guardar");
++
+   setTimeout(() => {
+-    const b = $("cLogoCambiar"), q = $("cLogoQuitar");
++    /* ---- licencia ---- */
++    const licB = $("cLicCambiar");
++    if (licB) licB.onclick = async () => {
++      // El diálogo nativo pregunta dos veces y, si dice que sí, reinicia. Si
++      // devuelve false, el usuario se arrepintió y no hay nada que hacer.
++      $("modal").classList.remove("on");
++      try { await window.despz.licenciaCambiar(); } catch {}
++    };
++
++    /* ---- la llave ---- */
++    const inp = $("cLlave"), msg = $("cLlaveMsg");
++    const decir = (t, mal) => {
++      if (!msg) return;
++      msg.textContent = t;
++      msg.style.color = mal ? "var(--warn)" : "var(--acc2)";
++    };
++    const ayuda = $("cLlaveAyuda"), caja = $("cLlaveAyudaCaja");
++    if (ayuda) ayuda.onclick = () => {
++      caja.hidden = !caja.hidden;
++      ayuda.textContent = caja.hidden ? "¿Cómo saco mi llave? →" : "Ocultar los pasos";
++    };
++    const probar = $("cLlaveProbar");
++    if (probar) probar.onclick = async () => {
++      const v = (inp?.value || "").trim();
++      // Sin nada pegado se prueba la que está guardada: es el caso de Mike
++      // —ya hay una, y lo que no se sabe es si sirve.
++      decir(v ? "Preguntándole a Anthropic por la llave pegada…"
++              : "Preguntándole a Anthropic por la llave puesta…", false);
++      msg.style.color = "var(--txt2)";
++      probar.disabled = true;
++      try {
++        const r = await api("/api/llave/probar", {
++          method: "POST", headers: { "Content-Type": "application/json" },
++          body: JSON.stringify({ valor: v }),
++        });
++        decir(r.dicho, !r.ok);
++      } catch (e) { decir(T2("no se pudo probar: %s", e.message), true); }
++      finally { probar.disabled = false; }
++    };
++    const g = $("cLlaveGuardar");
++    if (g) g.onclick = async () => {
++      const v = (inp?.value || "").trim();
++      if (!v) { decir("Pega la llave primero.", true); return; }
++      // La forma se revisa antes de guardarla: pegar media llave es el error
++      // más común y el error de Anthropic no lo dice (#046).
++      if (!/^sk-ant-/.test(v)) {
++        decir("Eso no parece una llave: las de Anthropic empiezan con «sk-ant-».", true);
++        return;
++      }
++      await guardarLlave(v);
++      $("modal").classList.remove("on");
++      abrirConfig();                 // se vuelve a abrir con el estado nuevo
++    };
++    const q = $("cLlaveQuitar");
++    if (q) q.onclick = async () => {
++      await guardarLlave("");
++      $("modal").classList.remove("on");
++      abrirConfig();
++    };
++
++    /* ---- logotipo ---- */
++    const b = $("cLogoCambiar"), qq = $("cLogoQuitar");
+     if (b) b.onclick = () => { $("modal").classList.remove("on"); elegirLogo(); };
+-    if (q) q.onclick = async () => { $("modal").classList.remove("on"); await quitarLogo(); };
++    if (qq) qq.onclick = async () => { $("modal").classList.remove("on"); await quitarLogo(); };
++
++    /* ---- actualizaciones ---- */
+     const bajar = $("cActBajar"), rev = $("cActRevisar");
