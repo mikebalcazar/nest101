@@ -1,0 +1,220 @@
+diff --git a/core/taller.py b/core/taller.py
+index 1279ded..43e8fd5 100644
+--- a/core/taller.py
++++ b/core/taller.py
+@@ -57,2 +57,7 @@ def _de_fabrica() -> dict:
+         "idioma": "en",
++        # #105 — Las unidades son sólo de LECTURA: el programa calcula y corta
++        # en milímetros siempre. Esto nada más cambia cómo se leen las cotas en
++        # pantalla, que es donde Mike mide a ojo mientras dibuja. De fábrica,
++        # milímetros: es lo que trae el archivo y lo que ya conoce el taller.
++        "unidades": "mm",
+     }
+@@ -60,2 +65,7 @@ def _de_fabrica() -> dict:
+ 
++# Lo que se acepta en «unidades». Se valida en un solo lugar: un valor raro en
++# el perfil dejaría las cotas en blanco y nadie relacionaría eso con esto.
++UNIDADES = ("mm", "cm", "pulg")
++
++
+ def _completar_estandar(guardado: Optional[dict]) -> dict:
+@@ -91,2 +101,6 @@ def leer() -> dict:
+             d.setdefault("idioma", "en")
++            # #105 — misma razón: un perfil escrito antes de que existieran las
++            # unidades no las trae, y no pueden llegar en blanco a la pantalla.
++            if d.get("unidades") not in UNIDADES:
++                d["unidades"] = "mm"
+             return d
+diff --git a/electron/preload.js b/electron/preload.js
+index 2e7287a..fd8cbe0 100644
+--- a/electron/preload.js
++++ b/electron/preload.js
+@@ -33,2 +33,13 @@ contextBridge.exposeInMainWorld("despz", {
+ 
++  /* #105 — la licencia, asomada a la ventana.
++   *
++   *  Hasta aquí sólo se veía en el menú nativo (Ayuda → «Licencia de este
++   *  equipo…»), que es un lugar donde nadie la busca. `licencia()` nada más
++   *  LEE —no toca el archivo ni habla con la suite— y `licenciaCambiar()`
++   *  abre el mismo diálogo nativo de siempre, con sus dos confirmaciones:
++   *  cambiar de cuenta cierra el programa, y eso no se hace desde un botón
++   *  de la página sin preguntar dos veces. */
++  licencia: () => ipcRenderer.invoke("licencia-resumen"),
++  licenciaCambiar: () => ipcRenderer.invoke("licencia-menu"),
++
+   // #016 — la app se abrió con un .t101x (doble clic o «Abrir con»)
+diff --git a/identificador/rutas.py b/identificador/rutas.py
+index 4993195..1ed991d 100644
+--- a/identificador/rutas.py
++++ b/identificador/rutas.py
+@@ -110,2 +110,14 @@ def _leer(trabajo_id: str, archivo: Path, despacho: Optional[str], backend: str)
+ _EN_CASTELLANO = [
++    # #105 — Mike, 11-oct-2026: pegó una llave buena y el programa dijo que
++    # «Anthropic no aceptó la llave». La llave sí era válida; lo que le faltaba
++    # era estar ligada a un workspace. Va PRIMERO porque Anthropic lo manda
++    # como «invalid_request_error» y cualquier otra pista lo taparía.
++    ("not scoped to a workspace",
++     "La llave es válida pero no está ligada a ningún workspace, y así "
++     "Anthropic no la deja leer planos. Haz otra en platform.claude.com → "
++     "Settings → API keys escogiendo un workspace, y pégala en "
++     "Ajustes → Llave de Claude."),
++    ("not_found_error",
++     "Anthropic ya no tiene el modelo que pide este programa. Es falla "
++     "nuestra, no de tu llave: repórtalo y se cambia el modelo."),
+     ("streaming is required",
+@@ -114,5 +126,5 @@ _EN_CASTELLANO = [
+     ("authentication_error",
+-     "Anthropic no aceptó la llave. Revísala en Ajustes → Leer plano."),
++     "Anthropic no aceptó la llave. Revísala en Ajustes → Llave de Claude."),
+     ("invalid x-api-key",
+-     "Anthropic no aceptó la llave. Revísala en Ajustes → Leer plano."),
++     "Anthropic no aceptó la llave. Revísala en Ajustes → Llave de Claude."),
+     ("credit balance",
+diff --git a/server.py b/server.py
+index 16faaef..b7bd4fc 100644
+--- a/server.py
++++ b/server.py
+@@ -119,2 +119,3 @@ class PerfilIn(BaseModel):
+     idioma: Optional[str] = None                       # #085
++    unidades: Optional[str] = None                     # #105
+ 
+@@ -348,2 +349,9 @@ def llave_guardar(req: LlaveIn):
+     hay = TALLER.guardar_llave(req.valor)
++    # #105 — al quitar la llave hay que sacarla TAMBIÉN del entorno de este
++    # proceso. `taller.llave()` mira el entorno antes que el archivo (es la
++    # manera de inyectar una llave para probar), así que la vieja seguía
++    # tapando al archivo ya borrado: «Quitar» no quitaba nada hasta reiniciar
++    # el programa, y la pantalla decía que seguía puesta porque de verdad
++    # seguía puesta. Lo cazó la prueba del navegador del menú de Ajustes.
++    os.environ.pop("ANTHROPIC_API_KEY", None)
+     _poner_llave_en_entorno()
+@@ -352,2 +360,61 @@ def llave_guardar(req: LlaveIn):
+ 
++@app.post("/api/llave/probar")
++def llave_probar(req: LlaveIn):
++    """#105 — ¿esta llave sirve DE VERDAD? Se le pregunta a Anthropic.
++
++    Mike, 11-oct-2026: pegó una llave buena de la consola y «Leer plano» le
++    dijo que Anthropic no la aceptaba. La llave sí servía; lo que faltaba era
++    que estuviera ligada a un *workspace*. Guardarla sin probarla deja al
++    taller descubriendo la falla a medio plano, tres minutos después.
++
++    Se prueba con el MISMO modelo que lee los planos y con un mensaje de un
++    token: es la prueba honesta —una llave puede autenticar y aun así no poder
++    con ese modelo— y cuesta una fracción de centavo.
++
++    Se prueba la llave que llega en la petición si viene; si no, la guardada.
++    Así se puede probar ANTES de guardar y no se pisa una que funciona por
++    pegar otra mal.
++    """
++    import urllib.error
++    import urllib.request
++
++    valor = (req.valor or "").strip() or TALLER.llave()
++    if not valor:
++        return {"ok": False, "dicho": "No hay llave que probar: pégala primero."}
++
++    # La forma se revisa aquí también, no sólo en la pantalla: una llave de
++    # sesión del navegador (`sk-ant-sid-…`) autentica para otras cosas y nunca
++    # va a servir para la API, y el error que devuelve no lo dice.
++    if not valor.startswith("sk-ant-"):
++        return {"ok": False, "dicho": "Eso no parece una llave de Anthropic: "
++                                      "las de API empiezan con «sk-ant-»."}
++
++    from identificador import aprendizaje
++    from identificador.rutas import _en_castellano
++    cuerpo = json.dumps({
++        "model": aprendizaje.MODELO_DEFAULT, "max_tokens": 1,
++        "messages": [{"role": "user", "content": "ok"}],
++    }).encode("utf-8")
++    pet = urllib.request.Request(
++        "https://api.anthropic.com/v1/messages", data=cuerpo,
++        headers={"x-api-key": valor, "anthropic-version": "2023-06-01",
++                 "content-type": "application/json"})
++    try:
++        with urllib.request.urlopen(pet, timeout=30) as r:
++            r.read()
++        return {"ok": True, "modelo": aprendizaje.MODELO_DEFAULT,
++                "dicho": "La llave sirve: Anthropic contestó con el modelo que "
++                         "usa «Leer plano»."}
++    except urllib.error.HTTPError as e:
++        try:
++            crudo = json.loads(e.read().decode("utf-8", "replace"))
++            crudo = crudo.get("error", {}).get("message") or str(crudo)
++        except Exception:                                       # noqa: BLE001
++            crudo = f"HTTP {e.code}"
++        return {"ok": False, "dicho": _en_castellano(Exception(crudo)),
++                "detalle": crudo}
++    except Exception as e:                                      # noqa: BLE001
++        return {"ok": False, "dicho": _en_castellano(e), "detalle": str(e)}
++
++
+ @app.get("/api/perfil")
+@@ -371,2 +438,8 @@ def perfil_guardar(req: PerfilIn):
+         d["idioma"] = IDI.poner(req.idioma)
++    if req.unidades is not None:
++        # #105 — se valida aquí y no en la pantalla: el perfil lo puede editar
++        # cualquiera a mano, y una unidad inventada dejaría las cotas vacías.
++        if req.unidades not in TALLER.UNIDADES:
++            raise HTTPException(400, f"unidad desconocida «{req.unidades}»")
++        d["unidades"] = req.unidades
+     TALLER.guardar(d)
+@@ -394,2 +467,5 @@ def defaults():
+         "estandar": _p["estandar"],
++        # #105 — las unidades viajan con lo de arrancar: la parrilla y las cotas
++        # se pintan en el primer cuadro, antes de que nadie abra Ajustes.
++        "unidades": _p.get("unidades", "mm"),
+         "presets": [
+diff --git a/ui/index.html b/ui/index.html
+index 607fc78..21eb74f 100644
+--- a/ui/index.html
++++ b/ui/index.html
+@@ -307,2 +307,7 @@
+       <div class="pane" id="pStd">
++        <!-- #105 — La llave de Claude se fue a Ajustes (⚙), con la licencia,
++             el idioma y las unidades. Aquí vivía desde #040 y el dueño del
++             programa no la encontró: estaba en el lugar donde se usa y no en
++             uno donde se administre. Queda el letrero porque quien ya sabía
++             que estaba aquí tiene que saber a dónde se fue. -->
+         <div class="sec">
+@@ -310,11 +315,7 @@
+           <div style="font-size:11.5px;color:var(--txt3);margin-bottom:8px">
+-            Se teclea una vez. Queda en este equipo, en tu carpeta de Taller 101
+-            — nunca dentro del programa.</div>
+-          <div class="fila"><label>Llave de Anthropic</label>
+-            <input id="sLlave" type="password" placeholder="sk-ant-…"
+-                   autocomplete="off" spellcheck="false"></div>
+-          <div class="fila"><label></label>
++            La llave de Claude ahora se pone en Ajustes (el engrane de arriba),
++            donde además se puede probar.</div>
++          <div class="fila"><label>Llave de Claude</label>
+             <div style="display:flex;gap:6px;align-items:center">
+-              <button class="gh" id="bLlaveGuardar" style="padding:4px 10px">Guardar</button>
+-              <button class="gh" id="bLlaveQuitar" style="padding:4px 10px">Quitar</button>
++              <button class="gh" id="bIrAjustes" style="padding:4px 10px">Abrir Ajustes…</button>
+               <span id="llaveEstado" style="font-size:11.5px;color:var(--txt3)"></span>
+diff --git a/ui/leer-plano.js b/ui/leer-plano.js
+index 146d9a1..8c0b547 100644
+--- a/ui/leer-plano.js
++++ b/ui/leer-plano.js
+@@ -108,3 +108,5 @@ const ESTILOS = `
+  */
+-const AYUDA_LLAVE = `
++/* #105 — se exporta para que Ajustes → Llave de Claude enseñe los MISMOS
++ * pasos. Dos copias del instructivo acabarían diciendo cosas distintas. */
++export const AYUDA_LLAVE = `
+ <div class="lp-ayuda">
+diff --git a/ui/styles.css b/ui/styles.css
+index 94a1326..5ab74d7 100644
+--- a/ui/styles.css
++++ b/ui/styles.css
+@@ -232,3 +232,8 @@ td.n,th.n{text-align:right}
+ .modal h2{font-size:14px;margin-bottom:14px}
+-.modal .pie{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
++/* #105 — Los botones se quedan pegados abajo. Ajustes trae siete secciones y
++   no cabe de una vez; con el pie dentro del hueco que se desliza, «Guardar»
++   sólo aparecía después de bajar hasta el final. El -18px cancela el relleno
++   de la caja para que no quede una franja transparente debajo. */
++.modal .pie{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;
++  position:sticky;bottom:-18px;background:var(--panel);padding:10px 0 18px}
+ .aviso{background:var(--aviso-bg);border-left:3px solid var(--acc);padding:8px 10px;
