@@ -2,14 +2,14 @@
 
 *Lo escribe el mandadero de shape101 al correr en Actions, prestado a nest101.*
 
-- corrido: 2026-10-11T21:14:42+00:00
+- corrido: 2026-10-11T21:57:26+00:00
 
 ```
 nest101 clonado
-14 librerías instaladas
-build/107-sitio-al-publicar.patch aplicado y retirado
-el parche dejó lo que debía
-apps.yml sigue siendo YAML válido
+13 librerías instaladas
+build/108-instrumental.patch aplicado y retirado
+el parche dejó lo que debía, y se llevó lo que debía
+los tres archivos de la puerta pasan node --check
 verificar.py: TODO OK
-pruebas/licencia.mjs: todo bien · 50 de 50 pasaron
+pruebas/licencia.mjs: todo bien · 53 de 53 pasaron
 ```

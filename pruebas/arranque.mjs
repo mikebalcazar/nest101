@@ -39,6 +39,12 @@ const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
  * esta prueba no imprimía ni una línea —se moría a media medición y salía con
  * 0, igual que en su máquina—, que es la clase de falla que no se puede ni
  * reportar. */
+/* Como en `main.js`: mientras la puerta está abierta, quedarse sin ventanas NO
+ * cierra el programa. Entre el primer intento y el segundo hay un instante sin
+ * ninguna, y sin este escucha Electron cerraría la aplicación ahí mismo —que
+ * es exactamente lo que `enLaPuerta` evita allá. */
+app.on("window-all-closed", () => {});
+
 let acabo = false;
 app.on("will-quit", (e) => {
   if (acabo) return;
@@ -83,7 +89,15 @@ app.whenReady().then(async () => {
     chk(/ERR_|\(\d|\(-?\d/.test(texto), `y trae el código crudo para reportarlo: ${
       (texto.match(/ERR_[A-Z_]+/) || ["sin código"])[0]}`);
     chk(dicho.some((t) => /no cargó/.test(t)),
-        `queda apuntado en el registro: «${dicho[dicho.length - 1]}»`);
+        `queda apuntado en el registro: «${dicho.find((x) => /no cargó/.test(x))}»`);
+    // #108 — lo que se agregó para poder diagnosticar la máquina de Mike
+    chk(dicho.some((t) => /prueba de red sin ventana/.test(t)),
+        `se prueba la red SIN ventana, que es lo que separa los dos casos: «${
+          dicho.find((x) => /prueba de red/.test(x))}»`);
+    chk(dicho.some((t) => /sesión limpia/.test(t)),
+        "y se intenta otra vez con una sesión limpia, por si estorba la guardada");
+    chk(dicho.filter((t) => /abriendo la pantalla/.test(t)).length === 2,
+        `dos intentos, ni uno más: ${dicho.filter((t) => /abriendo la pantalla/.test(t)).length}`);
     v.close();                      // es lo que haría el usuario
   }
   const r1 = await puerta;

@@ -1,0 +1,5 @@
+Activación: si la pantalla de activación no carga, nest101 lo intenta otra vez con una sesión limpia. Si lo que estorbaba era la sesión guardada del equipo, con esto ya abre.
+Activación: el programa le pregunta a la suite por su cuenta, sin ventana de por medio, y apunta la respuesta. Así se distingue "esta computadora no llega a la suite" de "la ventana no pudo enseñarla", que es lo que no se podía saber.
+Activación: si la red responde bien, el aviso ya no te manda a revisar el proxy. Dice lo que se midió, y queda el motivo crudo para reportarlo.
+Arranque: queda apuntado en arranque.log cada paso de la activación con su hora, y si el proceso de la ventana se cae, con qué motivo. Antes eso no se podía ver desde fuera.
+Arranque: arreglado un error que salía al enseñar el motivo de la falla ("Object has been destroyed"): se comprobaba la ventana, pero el que estaba muerto era su contenido.

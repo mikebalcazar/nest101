@@ -182,6 +182,15 @@ console.log('\n· por qué no abrió (#106)');
   const raro = n.noAbrio('algo_que_no_existe', '', 'nest101');
   rev(/no se sabe/.test(raro.detalle), 'un motivo nuevo no se queda mudo', raro.titulo);
 
+  /* #108 — la distinción que vale: con la red medida y buena, el aviso ya no
+   * manda a revisar el proxy. */
+  const redBuena = n.noAbrio(
+    'sin_red', 'el proceso de la ventana se fue (crashed) (0) · la suite contestó 200', 'nest101');
+  rev(/Tu conexión está bien/.test(redBuena.detalle),
+      'si la suite sí contestó, el aviso no le echa la culpa a la red', redBuena.titulo);
+  rev(!/proxy/i.test(redBuena.detalle), 'y ya no manda a pelearse con el proxy');
+  rev(redBuena.detalle.includes('crashed'), 'pero sí enseña el motivo crudo para reportarlo');
+
   const conDetalle = n.noAbrio('sin_red', 'ERR_CONNECTION_REFUSED (-102)', 'nest101');
   rev(conDetalle.detalle.includes('ERR_CONNECTION_REFUSED'),
       'el código crudo viaja para poder reportarlo');

@@ -15,7 +15,7 @@
  * clara que una app que se comporta raro.
  */
 
-const { BrowserWindow, app } = require("electron");
+const { BrowserWindow, app, net } = require("electron");
 const n = require("./licencia-nucleo");
 
 const API = (process.env.SUITE101_API || n.API_POR_OMISION).replace(/\/+$/, "");
@@ -26,13 +26,64 @@ const carpeta = () => app.getPath("userData");
 const huella = () => n.huella(carpeta());
 const guardada = () => n.guardada(carpeta());
 
-/** Abre la pantalla de la suite y espera a que active. La pantalla es la
- *  misma para el camino de la cuenta y el de la clave tecleada; aquí sólo se
- *  escucha el final: `window.__t101_licencia` y el fragmento `#listo`. */
+/* #108 — Lo que de verdad pasa cuando la pantalla de activación no carga.
+ *
+ * Con la 0.19.3 Mike ya vio el motivo, y el motivo no cuadraba:
+ *
+ *     ERR_FAILED (-2) loading 'https://…/licencias/entrar?…'
+ *     TypeError: Object has been destroyed   ← 1 ms después
+ *
+ * Medido desde aquí: esa MISMA dirección abre perfecto en su Chrome, en su
+ * máquina, en ese momento. Así que no es la red, ni el proxy, ni la VPN: lo
+ * que se muere es la ventana. Y dos detalles del registro lo confirman: no
+ * hubo `did-fail-load` —la promesa se rechazó por el camino genérico, que es
+ * el de «la navegación se detuvo sin llegar»— y, un milisegundo después, el
+ * contenido de la ventana ya estaba destruido.
+ *
+ * No se adivina. Esta versión apunta lo que falta para saberlo:
+ *
+ *  · si el proceso de la ventana se cae, y CON QUÉ MOTIVO (`render-process-gone`
+ *    trae `reason` y `exitCode`: «crashed», «killed», «launch-failed»… un
+ *    antivirus de empresa matando el proceso se ve ahí y en ningún otro lado);
+ *  · si la suite contesta DESDE EL PROCESO PRINCIPAL, sin ventana de por medio
+ *    (`net.request`): separa «esta computadora no llega» de «la ventana no
+ *    pudo enseñarlo», que es justo lo que no se podía distinguir;
+ *  · cada paso de la navegación, con su hora.
+ *
+ * Y de paso intenta otra vez con una ventana limpia, sin la sesión guardada:
+ * si lo que estorba es la carpeta `Partitions/suite101` —cosa que pasa—, el
+ * segundo intento abre y el taller ni se entera.
+ */
 function pedirEnPantalla(version, aviso, avisar = () => {}) {
+  const direccion = n.direccionDeLaPantalla({
+    api: API, programa: PROGRAMA, nombre: NOMBRE, huella: huella(), version, aviso });
+
+  // El primer intento usa la sesión guardada, que es la que hace que la
+  // segunda vez no haya que volver a escribir la contraseña. Si falla, el
+  // segundo va con una sesión de usar y tirar: cuesta volver a entrar, y vale
+  // más eso que no abrir.
+  return unIntento({ direccion, avisar, guardarSesion: true, quedarse: false })
+    .then(async (r) => {
+      if (r.ok || r.motivo === "cancelado") return r;
+      avisar("segundo intento, con una sesión limpia");
+      const r2 = await unIntento({ direccion, avisar, guardarSesion: false, quedarse: true });
+      // Se reporta el motivo del SEGUNDO, que es el último que se vio, pero
+      // sin perder el del primero: si son distintos, eso es el dato.
+      if (!r2.ok && r.detalle && r2.detalle && r.detalle !== r2.detalle) {
+        r2.detalle = `${r2.detalle} · el primer intento fue: ${r.detalle}`;
+      }
+      return r2;
+    });
+}
+
+/** Un intento de abrir la pantalla. `quedarse` dice si la ventana se queda en
+ *  pantalla enseñando el motivo (el último intento) o se cierra calladita para
+ *  dejar sitio al siguiente. */
+function unIntento({ direccion, avisar, guardarSesion, quedarse }) {
   return new Promise((resolve) => {
-    let resuelto = false;
+    let resuelto = false, listo = false, fallo = null, probada = false, dichoRed = "";
     const acabar = (r) => { if (!resuelto) { resuelto = true; resolve(r); } };
+    const ahora = () => new Date().toISOString().slice(11, 23);
 
     let v;
     try {
@@ -44,7 +95,10 @@ function pedirEnPantalla(version, aviso, avisar = () => {}) {
         // del paquete (`files` del package.json empaqueta sólo `electron/**`).
         // Medido: una ruta que no existe no revienta, pero tampoco pinta nada,
         // y dejarla escrita hacía creer que el ícono estaba puesto.
-        webPreferences: { contextIsolation: true, nodeIntegration: false, partition: "persist:suite101" },
+        webPreferences: {
+          contextIsolation: true, nodeIntegration: false,
+          ...(guardarSesion ? { partition: "persist:suite101" } : {}),
+        },
       });
     } catch (e) {
       avisar("no se pudo abrir la ventana de activación: " + e.message);
@@ -52,66 +106,132 @@ function pedirEnPantalla(version, aviso, avisar = () => {}) {
       return;
     }
     v.setMenu(null);
+    const wc = v.webContents;
 
-    let listo = false;
-    let fallo = null;          // #106 — el motivo real, para no llamarlo «cancelado»
+    /** Enseñar algo en la ventana sin que eso pueda tumbar el programa.
+     *  La 0.19.3 llamaba a `loadURL` comprobando sólo la ventana, y el que
+     *  estaba muerto era su CONTENIDO: `v.isDestroyed()` decía que no y
+     *  `loadURL` reventaba con «Object has been destroyed». Se comprueban los
+     *  dos, y aun así va dentro de un try: entre la comprobación y la llamada
+     *  puede morirse. */
+    const enPantalla = (desc, codigo) => {
+      if (!quedarse) return;
+      try {
+        if (v.isDestroyed() || wc.isDestroyed()) {
+          avisar("no se pudo enseñar el motivo: la ventana ya no está");
+          return;
+        }
+        wc.loadURL(pantallaDeFallo(desc, codigo)).catch((e) =>
+          avisar("no se pudo enseñar el motivo: " + e.message));
+      } catch (e) {
+        avisar("no se pudo enseñar el motivo: " + e.message);
+      }
+    };
+
+    const cerrar = () => {
+      try { if (!v.isDestroyed()) v.destroy(); } catch { /* ya no estaba */ }
+    };
+
+    /** Lo que se hace cuando la pantalla no cargó, venga por donde venga. */
+    const noCargo = async (desc, codigo) => {
+      if (listo || fallo) return;
+      fallo = { codigo, desc };
+      avisar(`la pantalla de activación no cargó: ${desc} (${codigo})`);
+      if (!probada) {                       // una sola vez por intento
+        probada = true;
+        dichoRed = await probarRed(direccion, avisar);
+      }
+      if (quedarse) enPantalla(desc, codigo);
+      else cerrar();
+    };
+
+    /* ---- el rastro: cada paso, con su hora ---- */
+    wc.on("did-start-loading", () => avisar(`${ahora()} empieza a cargar`));
+    wc.on("did-stop-loading", () => avisar(`${ahora()} deja de cargar`));
+    wc.on("dom-ready", () => avisar(`${ahora()} la pantalla ya tiene contenido`));
+    wc.on("destroyed", () => avisar(`${ahora()} el contenido de la ventana se destruyó`));
+    wc.on("unresponsive", () => avisar(`${ahora()} la ventana dejó de responder`));
+    v.on("close", () => avisar(`${ahora()} se está cerrando la ventana`));
+
+    /* El dato que no teníamos: si el proceso de la ventana se cae y por qué.
+     * `reason` dice «crashed», «killed», «oom», «launch-failed»… y un
+     * antivirus de empresa que mata el proceso se ve justo aquí. */
+    wc.on("render-process-gone", (_e, d) => {
+      avisar(`${ahora()} el proceso de la ventana se fue: ${d.reason} (salida ${d.exitCode})`);
+      noCargo(`el proceso de la ventana se fue (${d.reason})`, d.exitCode || 0);
+    });
 
     const recoger = async (url) => {
       if (listo || !String(url).includes("#listo")) return;
       let dato = null;
-      try { dato = await v.webContents.executeJavaScript("window.__t101_licencia"); } catch { /* se cerró */ }
+      try { dato = await wc.executeJavaScript("window.__t101_licencia"); } catch { /* se cerró */ }
       if (!dato?.token) return;
       listo = true;
       n.guardar(carpeta(), { token: dato.token, hasta: dato.hasta, licencia: dato.licencia, correo: dato.correo || null });
       avisar("licencia activada y guardada");
       // Que alcance a leerse el «listo» antes de que la ventana desaparezca.
-      setTimeout(() => { if (!v.isDestroyed()) v.destroy(); }, 900);
+      setTimeout(() => { try { if (!v.isDestroyed()) v.destroy(); } catch { /* ya */ } }, 900);
       acabar({ ok: true });
     };
-    v.webContents.on("did-navigate-in-page", (_e, url) => { recoger(url); });
-    v.webContents.on("did-navigate", (_e, url) => { recoger(url); });
+    wc.on("did-navigate-in-page", (_e, url) => { recoger(url); });
+    wc.on("did-navigate", (_e, url) => { recoger(url); });
 
-    /* #106 — Lo que de verdad le pasó a Mike.
-     *
-     * Antes, si la pantalla no cargaba se DESTRUÍA la ventana y se resolvía
-     * «sin_red»… sólo que destruir dispara `closed`, que resolvía primero y
-     * con «cancelado». Arriba, el arranque sólo enseñaba diálogo para
-     * «sin_red», así que el programa se cerraba callado: una ventana que
-     * aparece y desaparece, y ni una palabra.
-     *
-     * Ahora la ventana NO se destruye: se queda enseñando el motivo, que es
-     * algo que el taller puede leer y reportar. Y el motivo viaja aparte del
-     * cierre, así que ya no se confunde con haber cancelado.
-     */
-    v.webContents.on("did-fail-load", (_e, codigo, desc, url, esPrincipal) => {
-      // -3 es ERR_ABORTED: una redirección que pisa a la anterior. Es normal
-      // —la pantalla de la suite redirige al volver de Google— y tomarla por
-      // falla era cerrar la ventana a media activación.
+    // -3 es ERR_ABORTED: una redirección que pisa a la anterior. Es normal
+    // —la pantalla de la suite redirige al volver de Google— y tomarla por
+    // falla era cerrar la ventana a media activación.
+    wc.on("did-fail-load", (_e, codigo, desc, _url, esPrincipal) => {
       if (!esPrincipal || codigo === -3 || listo) return;
-      fallo = { codigo, desc };
-      avisar(`la pantalla de activación no cargó: ${desc} (${codigo})`);
-      if (!v.isDestroyed()) v.loadURL(pantallaDeFallo(desc, codigo)).catch(() => {});
+      noCargo(desc, codigo);
     });
 
     v.on("closed", () => {
       if (listo) return;
+      // El resultado de la prueba sin ventana viaja en el detalle: es lo
+      // primero que hay que saber al leer el aviso, porque decide si el
+      // problema es la red o el programa.
       acabar(fallo
-        ? { ok: false, motivo: "sin_red", detalle: `${fallo.desc} (${fallo.codigo})` }
+        ? { ok: false, motivo: "sin_red",
+            detalle: `${fallo.desc} (${fallo.codigo})${dichoRed ? ` · ${dichoRed}` : ""}` }
         : { ok: false, motivo: "cancelado" });
     });
 
-    const direccion = n.direccionDeLaPantalla({
-      api: API, programa: PROGRAMA, nombre: NOMBRE, huella: huella(), version, aviso });
-    avisar("abriendo la pantalla de activación");
+    avisar(`abriendo la pantalla de activación${guardarSesion ? "" : " (sesión limpia)"}`);
     v.loadURL(direccion).catch((e) => {
-      // No se destruye nada: `did-fail-load` ya dejó el motivo en pantalla.
-      // Esta rama sólo existe para que la promesa no quede colgada sin rastro.
-      if (!fallo) {
-        fallo = { codigo: 0, desc: e.message };
-        avisar("no se pudo cargar la pantalla de activación: " + e.message);
-        if (!v.isDestroyed()) v.loadURL(pantallaDeFallo(e.message, 0)).catch(() => {});
-      }
+      // Esta rama es el camino genérico de Electron: la navegación se detuvo
+      // sin llegar y sin `did-fail-load`. Es justo por donde se cayó la
+      // 0.19.3 en la máquina de Mike.
+      noCargo(e.message, 0);
     });
+  });
+}
+
+/** Una llamada a la suite DESDE EL PROCESO PRINCIPAL, sin ventana de por medio.
+ *
+ *  Es la que separa las dos cosas que hasta ahora se confundían: «esta
+ *  computadora no llega a la suite» y «la ventana no pudo enseñarla». Si esto
+ *  contesta 200 y la ventana no cargó, el problema no es la red — y eso cambia
+ *  por completo qué hay que arreglar.
+ *
+ *  No decide nada: sólo deja el renglón en el registro. */
+function probarRed(url, avisar) {
+  return new Promise((resolve) => {
+    let acabo = false;
+    const fin = (t) => { if (!acabo) { acabo = true; avisar("prueba de red sin ventana: " + t); resolve(t); } };
+    const reloj = setTimeout(() => fin("no contestó en 15 s"), 15000);
+    try {
+      const p = net.request({ method: "GET", url });
+      p.on("response", (r) => {
+        r.on("data", () => {});
+        r.on("end", () => {});
+        clearTimeout(reloj);
+        fin(`la suite contestó ${r.statusCode}`);
+      });
+      p.on("error", (e) => { clearTimeout(reloj); fin("no se pudo: " + e.message); });
+      p.end();
+    } catch (e) {
+      clearTimeout(reloj);
+      fin("no se pudo ni intentar: " + e.message);
+    }
   });
 }
 

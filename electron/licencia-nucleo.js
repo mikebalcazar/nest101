@@ -68,6 +68,20 @@ function noAbrio(motivo, detalle, nombre = "nest101") {
     titulo: `${nombre} no pudo abrir`,
     detalle: "No pasó la revisión de licencia y no se sabe por qué.",
   };
+  /* #108 — Si la prueba sin ventana dice que la suite SÍ contestó, entonces
+   * echarle la culpa a la red es mandar al taller a pelearse con su router
+   * por nada. Se dice lo que se midió: la red va, lo que no pudo fue la
+   * ventana. Es el caso de Mike el 11-oct, y sin esto el aviso mentía. */
+  if (motivo === "sin_red" && /la suite contestó/.test(String(detalle || ""))) {
+    return {
+      titulo: `${nombre} no pudo abrir la pantalla de activación`,
+      detalle: ["Tu conexión está bien: la suite contestó cuando el programa le "
+              + "preguntó por su cuenta. Lo que no pudo abrirse es la ventana "
+              + "que la enseña, así que esto es del programa y hay que "
+              + "reportarlo con el renglón de abajo.",
+                detalle, donde].filter(Boolean).join("\n\n"),
+    };
+  }
   return { titulo: t.titulo, detalle: [t.detalle, detalle, donde].filter(Boolean).join("\n\n") };
 }
 
