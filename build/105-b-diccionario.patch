@@ -1,0 +1,137 @@
+diff --git a/assets/idioma/en.json b/assets/idioma/en.json
+index 12901a9..32c8ba5 100644
+--- a/assets/idioma/en.json
++++ b/assets/idioma/en.json
+@@ -17,2 +17,3 @@
+   "Abrir": "Open",
++  "Abrir Ajustes…": "Open Settings…",
+   "Abrir el proyecto": "Open the project",
+@@ -22,2 +23,3 @@
+   "Aceptar": "OK",
++  "Activar ahora…": "Activate now…",
+   "Actualizaciones": "Updates",
+@@ -30,2 +32,3 @@
+   "Ahí viven tu catálogo de materiales, tus módulos, tu logotipo y tu llave. Las actualizaciones no la tocan.": "That is where your material catalogue, your modules, your logo and your key live. Updates do not touch it.",
++  "Ajustes": "Settings",
+   "Al instalar se cierra nest101. Se instala encima de la versión que tienes: tus proyectos, tu catálogo y tu carpeta de taller no se tocan.": "Installing closes nest101. It installs over the version you have: your projects, your catalogue and your workshop folder are not touched.",
+@@ -47,2 +50,4 @@
+   "Ancho del travesaño": "Rail width",
++  "Anthropic no aceptó la llave. Revísala en Ajustes → Llave de Claude.": "Anthropic did not accept the key. Check it under Settings → Claude key.",
++  "Anthropic ya no tiene el modelo que pide este programa. Es falla nuestra, no de tu llave: repórtalo y se cambia el modelo.": "Anthropic no longer has the model this program asks for. That is our fault, not your key's: report it and the model gets changed.",
+   "Aprov.": "Yield",
+@@ -85,2 +90,4 @@
+   "Calcular esta": "Calculate this one",
++  "Cambiar de cuenta cierra nest101 y lo abre de nuevo para entrar con otra. El lugar de este equipo se libera en la cuenta de ahora; tus proyectos y tu carpeta de taller no se tocan.": "Switching account closes nest101 and opens it again to sign in with another one. This machine's slot is freed in the current account; your projects and your workshop folder are not touched.",
++  "Cambiar de cuenta…": "Switch account…",
+   "Cambiar entre claro y oscuro": "Switch between light and dark",
+@@ -94,2 +101,3 @@
+   "Categoría tuya, no viene con la app": "Your own category, it does not ship with the app",
++  "Centímetros": "Centimetres",
+   "Cerrar": "Close",
+@@ -146,2 +154,3 @@
+   "Duplicar seleccionado": "Duplicate selected",
++  "Dónde vive todo": "Where everything lives",
+   "El instalador ya está bajado y su huella cuadra.": "The installer is downloaded and its checksum matches.",
+@@ -149,2 +158,3 @@
+   "El mismo, en 600. Cierra huecos sin partir puerta.": "The same, in 600. Closes gaps without splitting a door.",
++  "El que firma": "The one that signs",
+   "El que firma planos y fichas. También se cambia con clic derecho sobre el logotipo de la barra.": "The one that signs drawings and cut cards. It can also be changed by right-clicking the logo in the bar.",
+@@ -162,2 +172,4 @@
+   "Escuadrar y colocar respaldo en ranura": "Square it up and seat the back panel in its groove",
++  "Eso no parece una llave de Anthropic: las de API empiezan con «sk-ant-».": "That does not look like an Anthropic key: API keys start with «sk-ant-».",
++  "Eso no parece una llave: las de Anthropic empiezan con «sk-ant-».": "That does not look like a key: Anthropic's start with «sk-ant-».",
+   "Esp.": "Thick.",
+@@ -166,2 +178,3 @@
+   "Esta categoría está vacía.": "This category is empty.",
++  "Estado": "Status",
+   "Estándar": "Standard",
+@@ -218,2 +231,3 @@
+   "Idioma": "Language",
++  "Idioma y unidades": "Language and units",
+   "Ignorar esta versión": "Ignore this version",
+@@ -229,2 +243,6 @@
+   "La carpeta con todos sus muebles": "The folder with all its units",
++  "La licencia se administra desde la aplicación de escritorio. En el navegador no hay equipo que licenciar.": "The licence is managed from the desktop application. In a browser there is no machine to license.",
++  "La llave de Claude ahora se pone en Ajustes (el engrane de arriba), donde además se puede probar.": "The Claude key is now set under Settings (the cog at the top), where it can also be tested.",
++  "La llave es válida pero no está ligada a ningún workspace, y así Anthropic no la deja leer planos. Haz otra en platform.claude.com → Settings → API keys escogiendo un workspace, y pégala en Ajustes → Llave de Claude.": "The key is valid but it is not scoped to any workspace, and Anthropic will not let it read drawings that way. Make another one at platform.claude.com → Settings → API keys choosing a workspace, and paste it under Settings → Claude key.",
++  "La llave sirve: Anthropic contestó con el modelo que usa «Leer plano».": "The key works: Anthropic answered with the model «Read drawing» uses.",
+   "La puerta se corta a 45° en su canto de arriba y encima queda un manguete fijo: los dedos entran en el chaflán. El manguete sale en la lista de corte como una pieza más de frente.": "The door is cut at 45° along its top edge and a fixed rail sits above it: fingers go into the chamfer. The rail appears in the cut list as one more front part.",
+@@ -240,2 +258,3 @@
+   "Leer un plano y sacar los módulos": "Read a drawing and pull out its units",
++  "Licencia de este equipo": "Licence of this machine",
+   "Licencias de terceros": "Third-party licences",
+@@ -243,2 +262,3 @@
+   "Llave de Anthropic": "Anthropic key",
++  "Llave de Claude": "Claude key",
+   "Lleva cubierta encima": "Has a countertop on top",
+@@ -270,2 +290,3 @@
+   "Medidas generales (mm)": "Overall dimensions (mm)",
++  "Milímetros": "Millimetres",
+   "Minifix + tarugo": "Cam lock + dowel",
+@@ -283,2 +304,3 @@
+   "No hay avisos.": "No notices.",
++  "No hay llave que probar: pégala primero.": "There is no key to test: paste one first.",
+   "No hay muebles con gabinetes abiertos.": "No units with cabinets are open.",
+@@ -296,2 +318,3 @@
+   "ORDEN DE ARMADO": "ASSEMBLY ORDER",
++  "Ocultar los pasos": "Hide the steps",
+   "Offset línea": "Line offset",
+@@ -304,2 +327,4 @@
+   "Patas niveladoras y zoclo": "Levelling legs and toe kick",
++  "Pega la llave primero.": "Paste the key first.",
++  "Pegar otra": "Paste another one",
+   "Perfil de nariz": "Nosing profile",
+@@ -311,2 +336,5 @@
+   "Precios en MXN. El costeo se calcula por hojas completas consumidas en el nesting, más metros lineales de canto.": "Prices in MXN. Costing is worked out from whole sheets consumed in the nesting, plus linear metres of edge banding.",
++  "Preguntándole a Anthropic por la llave pegada…": "Asking Anthropic about the key you pasted…",
++  "Preguntándole a Anthropic por la llave puesta…": "Asking Anthropic about the key that is set…",
++  "Probar": "Test",
+   "Prof.": "Depth",
+@@ -318,2 +346,3 @@
+   "Puerta (# hojas)": "Door (# leaves)",
++  "Pulgadas": "Inches",
+   "Queda en tu equipo, fuera del proyecto: lo vas a tener en todas las cocinas. Las actualizaciones no lo tocan.": "It stays on your computer, outside the project: you will have it in every kitchen. Updates do not touch it.",
+@@ -344,2 +373,3 @@
+   "Se abre en tu navegador y se instala encima de la que tienes. Tus proyectos y tu carpeta de taller no se tocan.": "It opens in your browser and installs over the one you have. Your projects and your workshop folder are not touched.",
++  "Se baja aquí mismo, se comprueba su huella y se instala encima de la que tienes. Tus proyectos y tu carpeta de taller no se tocan.": "It is downloaded right here, its fingerprint is checked and it installs over the one you have. Your projects and your workshop folder are not touched.",
+   "Se descuenta del alto disponible para los frentes. El cuerpo del mueble no cambia: el perfil va atornillado al canto.": "It is taken off the height available for the fronts. The carcass does not change: the profile is screwed to the edge.",
+@@ -365,2 +395,3 @@
+   "Sobre los muebles": "Over the units",
++  "Sólo cambia cómo se leen las cotas del dibujo y las medidas de la parrilla. La lista de corte, los planos, el Excel y el DXF se quedan en milímetros a propósito: son los que van a la máquina y al carpintero, y una pantalla en pulgadas junto a un papel en milímetros es una hoja echada a perder.": "It only changes how the dimensions on the drawing and the sizes in the gallery are read. The cut list, the drawings, the Excel file and the DXF stay in millimetres on purpose: those are what go to the machine and to the carpenter, and a screen in inches next to paper in millimetres is a ruined sheet.",
+   "Sólo tarugo": "Dowel only",
+@@ -387,3 +418,5 @@
+   "Travesaños superiores": "Top rails",
++  "Un gabinete de # mm de alto se lee así:": "A cabinet # mm tall reads like this:",
+   "Un juego con todo junto —planos de todos los muebles en un solo PDF— más una subcarpeta por mueble.": "One set with everything together —drawings of every unit in a single PDF— plus a subfolder per unit.",
++  "Unidades": "Units",
+   "Uñero": "Finger pull",
+@@ -391,2 +424,3 @@
+   "Ver adentro": "See inside",
++  "Versión": "Version",
+   "Voladizo lateral": "Side overhang",
+@@ -477,2 +511,3 @@
+   "no hay muebles con gabinetes": "no units with cabinets",
++  "no se pudieron guardar las unidades": "the units could not be saved",
+   "no se pudo bajar": "could not download",
+@@ -484,2 +519,3 @@
+   "no se pudo leer": "could not be read",
++  "no se pudo probar: %s": "could not test it: %s",
+   "no se pudo quitar el logotipo": "the logo could not be removed",
+@@ -497,2 +533,3 @@
+   "puerta": "door",
++  "puesta": "set",
+   "ranurado": "grooved",
+@@ -507,2 +544,3 @@
+   "trabajo recuperado": "work recovered",
++  "unidades: %s": "units: %s",
+   "ver el texto": "see the text",
+@@ -517,2 +555,4 @@
+   "«Del proyecto» usa lo definido en la pestaña Estándar.": "«From the project» uses what the Standard tab defines.",
++  "«Probar» le pregunta a Anthropic si la llave sirve de verdad, con el mismo modelo que lee los planos: cuesta una fracción de centavo y te ahorra descubrirlo a medio plano. La llave no se vuelve a mostrar entera: con los últimos cuatro basta para saber cuál está puesta.": "«Test» asks Anthropic whether the key really works, using the same model that reads drawings: it costs a fraction of a cent and saves you finding out halfway through a drawing. The key is never shown in full again: the last four characters are enough to know which one is set.",
++  "¿Cómo saco mi llave? →": "How do I get my key? →",
+   "Área m²": "Area m²",
+@@ -527,2 +567,2 @@
+   "☆ Guardar como modelo": "☆ Save as module"
+-}
+\ No newline at end of file
++}
