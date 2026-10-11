@@ -28,6 +28,49 @@ const porque = (nombre) => ({
   token_invalido: "La activación de este equipo ya no sirve. Hay que volver a entrar.",
 });
 
+/* #106 — Por qué no abrió, dicho para el taller.
+ *
+ * Mike, 11-oct-2026: «nest 0.19.2 no abre. Se ve que apenas aparece una
+ * ventana pero muy rápido y desaparece». El registro de su equipo acaba en
+ * «Activando tu licencia» y ahí se corta: la ventana de activación no cargó y
+ * el programa se cerró **sin decir una palabra**. Un programa que se cierra
+ * callado no se puede ni reportar: no hay nada que contar.
+ *
+ * Así que ahora cada manera de no pasar la puerta tiene su frase y su
+ * siguiente paso. Vive aquí, y no en el diálogo, para poder medirla con node a
+ * secas —sin abrir ventana— igual que el resto del núcleo.
+ */
+function noAbrio(motivo, detalle, nombre = "nest101") {
+  const donde = "El detalle queda en arranque.log, dentro de la carpeta de datos de "
+              + `${nombre} (%APPDATA%).`;
+  const t = {
+    cancelado: {
+      titulo: `${nombre} necesita una licencia activa para abrir`,
+      detalle: "Se cerró la ventana de activación sin entrar. Vuelve a abrir "
+             + `${nombre} y entra con la cuenta de la suite.`,
+    },
+    sin_red: {
+      titulo: "No se pudo llegar a la suite para activar este equipo",
+      detalle: "Revisa la conexión. Si esta computadora sale a internet por un "
+             + "proxy o una VPN de la empresa, también tiene que dejar pasar a "
+             + "la suite.",
+    },
+    vencida: {
+      titulo: `La licencia de ${nombre} venció en este equipo`,
+      detalle: "Y no hubo forma de llegar a la suite para renovarla. Conéctate "
+             + `a internet y vuelve a abrir ${nombre}.`,
+    },
+    ventana: {
+      titulo: "No se pudo abrir la ventana de activación",
+      detalle: "Es una falla del programa, no de tu licencia. Repórtalo.",
+    },
+  }[motivo] || {
+    titulo: `${nombre} no pudo abrir`,
+    detalle: "No pasó la revisión de licencia y no se sabe por qué.",
+  };
+  return { titulo: t.titulo, detalle: [t.detalle, detalle, donde].filter(Boolean).join("\n\n") };
+}
+
 /** El identificador de este equipo, que es lo que cuenta un «lugar».
  *
  *  NO es la MAC ni el número de serie del disco: es un azar que se guarda la
@@ -183,4 +226,4 @@ function direccionDeLaPantalla({ api, programa, nombre, huella: h, version, avis
   return u.toString();
 }
 
-module.exports = { API_POR_OMISION, huella, guardada, guardar, olvidar, alCorriente, latido, porque, esUnNo, resumen, direccionDeLaPantalla, archivoLicencia };
+module.exports = { API_POR_OMISION, huella, guardada, guardar, olvidar, alCorriente, latido, porque, esUnNo, noAbrio, resumen, direccionDeLaPantalla, archivoLicencia };

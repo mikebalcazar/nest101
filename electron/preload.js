@@ -31,6 +31,17 @@ contextBridge.exposeInMainWorld("despz", {
     ipcRenderer.send("resolver-cierre", ok);
   }),
 
+  /* #105 — la licencia, asomada a la ventana.
+   *
+   *  Hasta aquí sólo se veía en el menú nativo (Ayuda → «Licencia de este
+   *  equipo…»), que es un lugar donde nadie la busca. `licencia()` nada más
+   *  LEE —no toca el archivo ni habla con la suite— y `licenciaCambiar()`
+   *  abre el mismo diálogo nativo de siempre, con sus dos confirmaciones:
+   *  cambiar de cuenta cierra el programa, y eso no se hace desde un botón
+   *  de la página sin preguntar dos veces. */
+  licencia: () => ipcRenderer.invoke("licencia-resumen"),
+  licenciaCambiar: () => ipcRenderer.invoke("licencia-menu"),
+
   // #016 — la app se abrió con un .t101x (doble clic o «Abrir con»)
   alAbrirArchivo: (cb) =>
     ipcRenderer.on("abrir-archivo-externo", (_e, datos) => cb(datos)),

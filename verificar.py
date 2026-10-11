@@ -827,6 +827,144 @@ except Exception as _e:                                           # noqa: BLE001
     _ok2, _d2 = False, f" — {_e}"
 chk(_ok2, f"una ruta que recibe archivos se puede declarar{_d2}")
 
+
+# ------------------------------------------- #105 el menú de Ajustes
+#
+# Mike, 11-oct-2026: «no hay ningún lugar donde pueda gestionar el key de
+# Claude. Necesito un menú de configuración donde se puedan ajustar los varios
+# parámetros de la aplicación, incluida la licencia con la que está trabajando,
+# el key, el idioma, las unidades, etc.».
+#
+# Lo que se mide aquí es la mitad que corre en Python: la llave (ponerla,
+# probarla y QUITARLA), las unidades y que los textos nuevos tengan traducción.
+# La mitad de la pantalla —que el engrane abra el cuadro, que las siete
+# secciones estén y que las unidades cambien lo que se lee— se mide con un
+# navegador de verdad en `pruebas/ajustes.py`, que no puede correr aquí porque
+# playwright no viaja en el instalador.
+print("\n== #105: AJUSTES — llave, unidades y traducciones ==")
+import os as _os105                                               # noqa: E402
+import tempfile as _tmp105                                        # noqa: E402
+
+_perfil105 = _tmp105.mkdtemp(prefix="t105-")
+_antes105 = (_os105.environ.get("T101_PERFIL_DIR"),
+             _os105.environ.get("ANTHROPIC_API_KEY"))
+_os105.environ["T101_PERFIL_DIR"] = _perfil105
+_os105.environ.pop("ANTHROPIC_API_KEY", None)
+try:
+    from fastapi.testclient import TestClient as _TC105           # noqa: E402
+
+    import server as _srv105                                      # noqa: E402
+    _cli105 = _TC105(_srv105.app)
+
+    # --- la llave: ponerla, verla sin verla, y quitarla de verdad -----------
+    _r = _cli105.get("/api/llave").json()
+    chk(_r["hay"] is False, "de arranque no hay llave puesta")
+
+    _llave = "sk-ant-api03-" + "x" * 24 + "WXYZ"
+    _r = _cli105.put("/api/llave", json={"valor": _llave}).json()
+    chk(_r["hay"] is True and _r["pista"].endswith("WXYZ"),
+        f"se guarda y se dice CUÁL quedó, no cuál es: {_r['pista']}")
+    chk(_llave[:20] not in _r["pista"], "la pista no trae la llave entera")
+
+    # El que sí cazó un error de verdad: `taller.llave()` mira el entorno antes
+    # que el archivo, así que al borrar el archivo la vieja seguía puesta en
+    # este proceso y «Quitar» no quitaba nada hasta reiniciar el programa.
+    _r = _cli105.put("/api/llave", json={"valor": ""}).json()
+    chk(_r["hay"] is False, "«Quitar» la quita")
+    chk(_cli105.get("/api/llave").json()["hay"] is False,
+        "y sigue quitada en el mismo arranque, sin reiniciar")
+    chk(not _os105.environ.get("ANTHROPIC_API_KEY"),
+        "también se va del entorno, que es de donde la toma «Leer plano»")
+
+    # --- probar la llave ----------------------------------------------------
+    _r = _cli105.post("/api/llave/probar", json={"valor": ""}).json()
+    chk(_r["ok"] is False and "pégala" in _r["dicho"],
+        f"sin llave, probar lo dice en castellano: {_r['dicho']}")
+    _r = _cli105.post("/api/llave/probar", json={"valor": "pegué-cualquier-cosa"}).json()
+    chk(_r["ok"] is False and "sk-ant-" in _r["dicho"],
+        f"una llave con otra forma se caza sin gastar red: {_r['dicho']}")
+
+    # Lo que de verdad le pasó a Mike: una llave válida SIN workspace. Anthropic
+    # lo manda como «invalid_request_error», que hasta aquí salía crudo y en
+    # inglés. Se mide la traducción, no la llamada.
+    from identificador.rutas import _en_castellano as _ec105       # noqa: E402
+    _dicho = _ec105(Exception(
+        "This API key is not scoped to a workspace, so this request must "
+        "include the anthropic-workspace-id header with the ID of the "
+        "workspace to use."))
+    chk("workspace" in _dicho and "platform.claude.com" in _dicho,
+        f"la llave sin workspace se explica y dice qué hacer: «{_dicho[:60]}…»")
+    chk("Ajustes" in _ec105(Exception("authentication_error")),
+        "y los errores de llave mandan al menú nuevo, no al viejo lugar")
+
+    # --- unidades: se guardan, se validan, y NO tocan el cálculo ------------
+    chk(_cli105.get("/api/defaults").json()["unidades"] == "mm",
+        "de fábrica se lee en milímetros")
+    for _u in ("cm", "pulg", "mm"):
+        chk(_cli105.put("/api/perfil", json={"unidades": _u}).json()["unidades"] == _u,
+            f"se puede dejar en {_u}")
+    chk(_cli105.put("/api/perfil", json={"unidades": "varas"}).status_code == 400,
+        "una unidad inventada se rechaza en vez de dejar las cotas en blanco")
+
+    # El cálculo es el mismo con cualquier unidad: las unidades son de LECTURA.
+    _mueble = {"gabinetes": [{"nombre": "U", "tipo": "base", "ancho": 900,
+                              "alto": 880, "prof": 600,
+                              "frentes": [{"tipo": "puerta", "n": 2}]}]}
+    _cli105.put("/api/perfil", json={"unidades": "mm"})
+    _a = _cli105.post("/api/calcular", json=_mueble).json()["piezas"]
+    _cli105.put("/api/perfil", json={"unidades": "pulg"})
+    _b = _cli105.post("/api/calcular", json=_mueble).json()["piezas"]
+    chk([(p["largo"], p["ancho"]) for p in _a] == [(p["largo"], p["ancho"]) for p in _b],
+        "en pulgadas sale el MISMO corte: la máquina sigue en milímetros")
+finally:
+    for _k, _v in zip(("T101_PERFIL_DIR", "ANTHROPIC_API_KEY"), _antes105):
+        if _v is None:
+            _os105.environ.pop(_k, None)
+        else:
+            _os105.environ[_k] = _v
+
+# --- los textos nuevos, traducidos (misma razón que #098) ------------------
+for _txt in ["Ajustes", "Licencia de este equipo", "Llave de Claude",
+             "Idioma y unidades", "Dónde vive todo", "Unidades", "Probar",
+             "Milímetros", "Centímetros", "Pulgadas", "Pegar otra", "Estado",
+             "Cambiar de cuenta…", "Abrir Ajustes…", "Ocultar los pasos",
+             "Pega la llave primero.", "unidades: %s",
+             "Preguntándole a Anthropic por la llave puesta…"]:
+    chk(bool(_dic.get(_txt)), f"«{_txt}» tiene traducción — {_dic.get(_txt, 'FALTA')}")
+
+# Los párrafos largos del menú se buscan por su texto aplastado a un renglón,
+# que es como los busca `ui/idioma.js`. Se leen del archivo para que no haya
+# dos copias del párrafo que se puedan desfasar.
+import re as _re105                                               # noqa: E402
+
+_appjs = (_Path(__file__).parent / "ui" / "app.js").read_text(encoding="utf-8")
+_menu = _appjs.split("async function abrirConfig()")[1].split("setTimeout(")[0]
+#
+# Se parte igual que allá: cada etiqueta HTML corta el texto en pedazos, y cada
+# pedazo se busca por separado. Los números se sustituyen por «#», que es la
+# única regla del diccionario. Escrito a mano, esto se desfasaría; leído del
+# archivo, caza cualquier párrafo que alguien agregue sin traducir.
+_ESPACIOS105 = _re105.compile(r"\s+")
+_NUM105 = _re105.compile(r"\d+(?:[.,]\d+)*")
+
+
+def _traducida105(trozo: str) -> bool:
+    s = _ESPACIOS105.sub(" ", trozo).strip(" ·:")
+    if not s or not _re105.search(r"[A-Za-zÁÉÍÓÚÑáéíóúñ]", s):
+        return True                       # sólo signos o números: no se traduce
+    s = _ESPACIOS105.sub(" ", trozo).strip()
+    return bool(_dic.get(s) or _dic.get(_NUM105.sub("#", s)))
+
+
+_sueltos = []
+for _m in _re105.finditer(r"\$\{nota\(`([^`]+)`\)\}", _menu):
+    _crudo = _re105.sub(r"\$\{[^}]*\}", "", _m.group(1))     # fuera los datos
+    for _trozo in _re105.split(r"<[^>]+>", _crudo):
+        if not _traducida105(_trozo):
+            _sueltos.append(_ESPACIOS105.sub(" ", _trozo).strip()[:55])
+chk(not _sueltos, f"las notas del menú están traducidas — faltan: {_sueltos}")
+
+
 # El veredicto va AL FINAL y con código de salida.
 #
 # Estaba a la mitad del archivo y sin `sys.exit`: contaba sólo lo que había

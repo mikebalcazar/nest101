@@ -108,13 +108,25 @@ def _leer(trabajo_id: str, archivo: Path, despacho: Optional[str], backend: str)
 # eso, y peor: ninguno de los dos decía qué hacer. El mensaje crudo se guarda
 # aparte por si hay que diagnosticar.
 _EN_CASTELLANO = [
+    # #105 — Mike, 11-oct-2026: pegó una llave buena y el programa dijo que
+    # «Anthropic no aceptó la llave». La llave sí era válida; lo que le faltaba
+    # era estar ligada a un workspace. Va PRIMERO porque Anthropic lo manda
+    # como «invalid_request_error» y cualquier otra pista lo taparía.
+    ("not scoped to a workspace",
+     "La llave es válida pero no está ligada a ningún workspace, y así "
+     "Anthropic no la deja leer planos. Haz otra en platform.claude.com → "
+     "Settings → API keys escogiendo un workspace, y pégala en "
+     "Ajustes → Llave de Claude."),
+    ("not_found_error",
+     "Anthropic ya no tiene el modelo que pide este programa. Es falla "
+     "nuestra, no de tu llave: repórtalo y se cambia el modelo."),
     ("streaming is required",
      "Falla nuestra: la petición al modelo se armó mal. Repórtalo, tiene "
      "arreglo del lado del programa."),
     ("authentication_error",
-     "Anthropic no aceptó la llave. Revísala en Ajustes → Leer plano."),
+     "Anthropic no aceptó la llave. Revísala en Ajustes → Llave de Claude."),
     ("invalid x-api-key",
-     "Anthropic no aceptó la llave. Revísala en Ajustes → Leer plano."),
+     "Anthropic no aceptó la llave. Revísala en Ajustes → Llave de Claude."),
     ("credit balance",
      "La cuenta de Anthropic se quedó sin saldo. Cárgale en "
      "platform.claude.com → Settings → Billing."),

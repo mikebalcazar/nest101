@@ -106,7 +106,9 @@ const ESTILOS = `
  * programa en una máquina del taller no va a tener a la mano un archivo que
  * alguien le mandó por correo. Viaja con el instalador y no se puede perder.
  */
-const AYUDA_LLAVE = `
+/* #105 — se exporta para que Ajustes → Llave de Claude enseñe los MISMOS
+ * pasos. Dos copias del instructivo acabarían diciendo cosas distintas. */
+export const AYUDA_LLAVE = `
 <div class="lp-ayuda">
   <h4>Cómo sacar tu llave de Anthropic</h4>
   <p style="margin:0 0 12px">Se hace una sola vez por taller. Toma unos diez

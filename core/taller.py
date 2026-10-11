@@ -55,7 +55,17 @@ def _de_fabrica() -> dict:
         # la máquina es siempre el mismo. De fábrica, **inglés**: nest101 se
         # instala fuera de México y el que sí habla español lo cambia una vez.
         "idioma": "en",
+        # #105 — Las unidades son sólo de LECTURA: el programa calcula y corta
+        # en milímetros siempre. Esto nada más cambia cómo se leen las cotas en
+        # pantalla, que es donde Mike mide a ojo mientras dibuja. De fábrica,
+        # milímetros: es lo que trae el archivo y lo que ya conoce el taller.
+        "unidades": "mm",
     }
+
+
+# Lo que se acepta en «unidades». Se valida en un solo lugar: un valor raro en
+# el perfil dejaría las cotas en blanco y nadie relacionaría eso con esto.
+UNIDADES = ("mm", "cm", "pulg")
 
 
 def _completar_estandar(guardado: Optional[dict]) -> dict:
@@ -89,6 +99,10 @@ def leer() -> dict:
             # trae. Se completa con el de fábrica por la misma razón de #069:
             # una llave que falta no puede llegar en blanco a la interfaz.
             d.setdefault("idioma", "en")
+            # #105 — misma razón: un perfil escrito antes de que existieran las
+            # unidades no las trae, y no pueden llegar en blanco a la pantalla.
+            if d.get("unidades") not in UNIDADES:
+                d["unidades"] = "mm"
             return d
     except Exception:                                           # noqa: BLE001
         pass

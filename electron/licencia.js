@@ -16,7 +16,6 @@
  */
 
 const { BrowserWindow, app } = require("electron");
-const path = require("path");
 const n = require("./licencia-nucleo");
 
 const API = (process.env.SUITE101_API || n.API_POR_OMISION).replace(/\/+$/, "");
@@ -30,20 +29,33 @@ const guardada = () => n.guardada(carpeta());
 /** Abre la pantalla de la suite y espera a que active. La pantalla es la
  *  misma para el camino de la cuenta y el de la clave tecleada; aquí sólo se
  *  escucha el final: `window.__t101_licencia` y el fragmento `#listo`. */
-function pedirEnPantalla(version, aviso) {
+function pedirEnPantalla(version, aviso, avisar = () => {}) {
   return new Promise((resolve) => {
-    const v = new BrowserWindow({
-      width: 480, height: 700, resizable: false, minimizable: false, maximizable: false,
-      title: `Activar ${NOMBRE}`,
-      autoHideMenuBar: true,
-      icon: path.join(__dirname, "..", "build", "icon.ico"),
-      // Partición propia y persistente: la sesión de la suite se queda, así
-      // que la segunda vez no hay que volver a escribir la contraseña.
-      webPreferences: { contextIsolation: true, nodeIntegration: false, partition: "persist:suite101" },
-    });
+    let resuelto = false;
+    const acabar = (r) => { if (!resuelto) { resuelto = true; resolve(r); } };
+
+    let v;
+    try {
+      v = new BrowserWindow({
+        width: 480, height: 700, resizable: false, minimizable: false, maximizable: false,
+        title: `Activar ${NOMBRE}`,
+        autoHideMenuBar: true,
+        // #106 — Sin `icon`: apuntaba a `build/icon.ico`, que NO viaja dentro
+        // del paquete (`files` del package.json empaqueta sólo `electron/**`).
+        // Medido: una ruta que no existe no revienta, pero tampoco pinta nada,
+        // y dejarla escrita hacía creer que el ícono estaba puesto.
+        webPreferences: { contextIsolation: true, nodeIntegration: false, partition: "persist:suite101" },
+      });
+    } catch (e) {
+      avisar("no se pudo abrir la ventana de activación: " + e.message);
+      acabar({ ok: false, motivo: "ventana", detalle: e.message });
+      return;
+    }
     v.setMenu(null);
 
     let listo = false;
+    let fallo = null;          // #106 — el motivo real, para no llamarlo «cancelado»
+
     const recoger = async (url) => {
       if (listo || !String(url).includes("#listo")) return;
       let dato = null;
@@ -51,20 +63,87 @@ function pedirEnPantalla(version, aviso) {
       if (!dato?.token) return;
       listo = true;
       n.guardar(carpeta(), { token: dato.token, hasta: dato.hasta, licencia: dato.licencia, correo: dato.correo || null });
+      avisar("licencia activada y guardada");
       // Que alcance a leerse el «listo» antes de que la ventana desaparezca.
       setTimeout(() => { if (!v.isDestroyed()) v.destroy(); }, 900);
-      resolve({ ok: true });
+      acabar({ ok: true });
     };
     v.webContents.on("did-navigate-in-page", (_e, url) => { recoger(url); });
     v.webContents.on("did-navigate", (_e, url) => { recoger(url); });
-    v.on("closed", () => { if (!listo) resolve({ ok: false, motivo: "cancelado" }); });
 
-    v.loadURL(n.direccionDeLaPantalla({ api: API, programa: PROGRAMA, nombre: NOMBRE, huella: huella(), version, aviso }))
-      .catch(() => {
-        if (!v.isDestroyed()) v.destroy();
-        resolve({ ok: false, motivo: "sin_red" });
-      });
+    /* #106 — Lo que de verdad le pasó a Mike.
+     *
+     * Antes, si la pantalla no cargaba se DESTRUÍA la ventana y se resolvía
+     * «sin_red»… sólo que destruir dispara `closed`, que resolvía primero y
+     * con «cancelado». Arriba, el arranque sólo enseñaba diálogo para
+     * «sin_red», así que el programa se cerraba callado: una ventana que
+     * aparece y desaparece, y ni una palabra.
+     *
+     * Ahora la ventana NO se destruye: se queda enseñando el motivo, que es
+     * algo que el taller puede leer y reportar. Y el motivo viaja aparte del
+     * cierre, así que ya no se confunde con haber cancelado.
+     */
+    v.webContents.on("did-fail-load", (_e, codigo, desc, url, esPrincipal) => {
+      // -3 es ERR_ABORTED: una redirección que pisa a la anterior. Es normal
+      // —la pantalla de la suite redirige al volver de Google— y tomarla por
+      // falla era cerrar la ventana a media activación.
+      if (!esPrincipal || codigo === -3 || listo) return;
+      fallo = { codigo, desc };
+      avisar(`la pantalla de activación no cargó: ${desc} (${codigo})`);
+      if (!v.isDestroyed()) v.loadURL(pantallaDeFallo(desc, codigo)).catch(() => {});
+    });
+
+    v.on("closed", () => {
+      if (listo) return;
+      acabar(fallo
+        ? { ok: false, motivo: "sin_red", detalle: `${fallo.desc} (${fallo.codigo})` }
+        : { ok: false, motivo: "cancelado" });
+    });
+
+    const direccion = n.direccionDeLaPantalla({
+      api: API, programa: PROGRAMA, nombre: NOMBRE, huella: huella(), version, aviso });
+    avisar("abriendo la pantalla de activación");
+    v.loadURL(direccion).catch((e) => {
+      // No se destruye nada: `did-fail-load` ya dejó el motivo en pantalla.
+      // Esta rama sólo existe para que la promesa no quede colgada sin rastro.
+      if (!fallo) {
+        fallo = { codigo: 0, desc: e.message };
+        avisar("no se pudo cargar la pantalla de activación: " + e.message);
+        if (!v.isDestroyed()) v.loadURL(pantallaDeFallo(e.message, 0)).catch(() => {});
+      }
+    });
   });
+}
+
+/** La pantalla propia que se enseña cuando la de la suite no carga.
+ *
+ *  Va como `data:` y no como archivo porque tiene que poder enseñarse incluso
+ *  si lo que falló fue leer del disco, y porque así no hay un archivo más que
+ *  empaquetar —que es justo lo que salió mal con el ícono—. */
+function pantallaDeFallo(desc, codigo) {
+  const texto = `
+    <!doctype html><meta charset="utf-8">
+    <style>
+      body{font:14px/1.6 system-ui,Segoe UI,sans-serif;background:#16181c;color:#e7e9ee;
+           margin:0;padding:34px 30px}
+      h1{font-size:17px;margin:0 0 14px}
+      p{color:#aeb4c0;margin:0 0 12px}
+      code{background:#0f1115;border:1px solid #2a2e37;border-radius:5px;
+           padding:2px 6px;color:#cfd4de;font-size:12.5px}
+      .ojo{border-left:3px solid #d08b2c;background:#241d12;padding:10px 12px;
+           border-radius:0 6px 6px 0;margin:16px 0}
+    </style>
+    <h1>No se pudo abrir la pantalla de activación</h1>
+    <p>nest101 necesita entrar una vez a la suite para activar este equipo, y
+       no llegó.</p>
+    <div class="ojo"><code>${String(desc).replace(/[<&]/g, "")} (${codigo})</code></div>
+    <p>Lo más común es que esta computadora salga a internet por un proxy o una
+       VPN de la empresa que no deja pasar a la suite. También puede ser que no
+       haya internet en este momento.</p>
+    <p>Cierra esta ventana y vuelve a abrir nest101 cuando se arregle. El
+       detalle queda apuntado en <code>arranque.log</code>, en la carpeta de
+       datos de nest101.</p>`;
+  return "data:text/html;charset=utf-8," + encodeURIComponent(texto);
 }
 
 /** La puerta completa, que es lo que llama el arranque.
@@ -92,11 +171,11 @@ async function asegurar({ version, avisar } = {}) {
     if (r.ok) return { ok: true, licencia: guardada()?.licencia };
     if (r.sinRed) return { ok: false, motivo: "sin_red" };
     n.olvidar(carpeta());
-    return pedirEnPantalla(version, r.porque);
+    return pedirEnPantalla(version, r.porque, avisar);
   }
 
   if (avisar) avisar("Activando tu licencia");
-  return pedirEnPantalla(version);
+  return pedirEnPantalla(version, undefined, avisar);
 }
 
 /* #100 — «¿Con qué cuenta estoy?», y poder cambiarla.
@@ -155,4 +234,7 @@ function cambiarDeCuenta() {
   app.exit(0);
 }
 
-module.exports = { asegurar, huella, guardada, resumen, abrirMenu, cambiarDeCuenta, API, PROGRAMA, NOMBRE };
+/** #106 — Por qué no abrió, en palabras, para el diálogo del arranque. */
+const noAbrio = (motivo, detalle) => n.noAbrio(motivo, detalle, NOMBRE);
+
+module.exports = { asegurar, huella, guardada, resumen, abrirMenu, cambiarDeCuenta, noAbrio, API, PROGRAMA, NOMBRE };

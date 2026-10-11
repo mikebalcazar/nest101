@@ -117,6 +117,7 @@ class PerfilIn(BaseModel):
     catalogo: Optional[List[dict]] = None
     estandar: Optional[dict] = None
     idioma: Optional[str] = None                       # #085
+    unidades: Optional[str] = None                     # #105
 
 
 class LlaveIn(BaseModel):
@@ -346,8 +347,74 @@ def llave_estado():
 @app.put("/api/llave")
 def llave_guardar(req: LlaveIn):
     hay = TALLER.guardar_llave(req.valor)
+    # #105 — al quitar la llave hay que sacarla TAMBIÉN del entorno de este
+    # proceso. `taller.llave()` mira el entorno antes que el archivo (es la
+    # manera de inyectar una llave para probar), así que la vieja seguía
+    # tapando al archivo ya borrado: «Quitar» no quitaba nada hasta reiniciar
+    # el programa, y la pantalla decía que seguía puesta porque de verdad
+    # seguía puesta. Lo cazó la prueba del navegador del menú de Ajustes.
+    os.environ.pop("ANTHROPIC_API_KEY", None)
     _poner_llave_en_entorno()
     return {"hay": hay, "pista": TALLER.pista()}
+
+
+@app.post("/api/llave/probar")
+def llave_probar(req: LlaveIn):
+    """#105 — ¿esta llave sirve DE VERDAD? Se le pregunta a Anthropic.
+
+    Mike, 11-oct-2026: pegó una llave buena de la consola y «Leer plano» le
+    dijo que Anthropic no la aceptaba. La llave sí servía; lo que faltaba era
+    que estuviera ligada a un *workspace*. Guardarla sin probarla deja al
+    taller descubriendo la falla a medio plano, tres minutos después.
+
+    Se prueba con el MISMO modelo que lee los planos y con un mensaje de un
+    token: es la prueba honesta —una llave puede autenticar y aun así no poder
+    con ese modelo— y cuesta una fracción de centavo.
+
+    Se prueba la llave que llega en la petición si viene; si no, la guardada.
+    Así se puede probar ANTES de guardar y no se pisa una que funciona por
+    pegar otra mal.
+    """
+    import urllib.error
+    import urllib.request
+
+    valor = (req.valor or "").strip() or TALLER.llave()
+    if not valor:
+        return {"ok": False, "dicho": "No hay llave que probar: pégala primero."}
+
+    # La forma se revisa aquí también, no sólo en la pantalla: una llave de
+    # sesión del navegador (`sk-ant-sid-…`) autentica para otras cosas y nunca
+    # va a servir para la API, y el error que devuelve no lo dice.
+    if not valor.startswith("sk-ant-"):
+        return {"ok": False, "dicho": "Eso no parece una llave de Anthropic: "
+                                      "las de API empiezan con «sk-ant-»."}
+
+    from identificador import aprendizaje
+    from identificador.rutas import _en_castellano
+    cuerpo = json.dumps({
+        "model": aprendizaje.MODELO_DEFAULT, "max_tokens": 1,
+        "messages": [{"role": "user", "content": "ok"}],
+    }).encode("utf-8")
+    pet = urllib.request.Request(
+        "https://api.anthropic.com/v1/messages", data=cuerpo,
+        headers={"x-api-key": valor, "anthropic-version": "2023-06-01",
+                 "content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(pet, timeout=30) as r:
+            r.read()
+        return {"ok": True, "modelo": aprendizaje.MODELO_DEFAULT,
+                "dicho": "La llave sirve: Anthropic contestó con el modelo que "
+                         "usa «Leer plano»."}
+    except urllib.error.HTTPError as e:
+        try:
+            crudo = json.loads(e.read().decode("utf-8", "replace"))
+            crudo = crudo.get("error", {}).get("message") or str(crudo)
+        except Exception:                                       # noqa: BLE001
+            crudo = f"HTTP {e.code}"
+        return {"ok": False, "dicho": _en_castellano(Exception(crudo)),
+                "detalle": crudo}
+    except Exception as e:                                      # noqa: BLE001
+        return {"ok": False, "dicho": _en_castellano(e), "detalle": str(e)}
 
 
 @app.get("/api/perfil")
@@ -369,6 +436,12 @@ def perfil_guardar(req: PerfilIn):
         # cambiar el idioma saldría todavía en el anterior, y nadie relaciona
         # eso con haber tenido que reiniciar.
         d["idioma"] = IDI.poner(req.idioma)
+    if req.unidades is not None:
+        # #105 — se valida aquí y no en la pantalla: el perfil lo puede editar
+        # cualquiera a mano, y una unidad inventada dejaría las cotas vacías.
+        if req.unidades not in TALLER.UNIDADES:
+            raise HTTPException(400, f"unidad desconocida «{req.unidades}»")
+        d["unidades"] = req.unidades
     TALLER.guardar(d)
     return d
 
@@ -392,6 +465,9 @@ def defaults():
     return {
         "catalogo": _p["catalogo"],
         "estandar": _p["estandar"],
+        # #105 — las unidades viajan con lo de arrancar: la parrilla y las cotas
+        # se pintan en el primer cuadro, antes de que nadie abra Ajustes.
+        "unidades": _p.get("unidades", "mm"),
         "presets": [
             {"id": "base", "nombre": "Gabinete bajo", "ancho": 900, "alto": 880, "prof": 600},
             {"id": "aereo", "nombre": "Gabinete aéreo", "ancho": 900, "alto": 700, "prof": 350},

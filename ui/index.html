@@ -305,18 +305,19 @@
 
       <!-- ---- estándar ---- -->
       <div class="pane" id="pStd">
+        <!-- #105 — La llave de Claude se fue a Ajustes (⚙), con la licencia,
+             el idioma y las unidades. Aquí vivía desde #040 y el dueño del
+             programa no la encontró: estaba en el lugar donde se usa y no en
+             uno donde se administre. Queda el letrero porque quien ya sabía
+             que estaba aquí tiene que saber a dónde se fue. -->
         <div class="sec">
           <h3>Leer plano</h3>
           <div style="font-size:11.5px;color:var(--txt3);margin-bottom:8px">
-            Se teclea una vez. Queda en este equipo, en tu carpeta de Taller 101
-            — nunca dentro del programa.</div>
-          <div class="fila"><label>Llave de Anthropic</label>
-            <input id="sLlave" type="password" placeholder="sk-ant-…"
-                   autocomplete="off" spellcheck="false"></div>
-          <div class="fila"><label></label>
+            La llave de Claude ahora se pone en Ajustes (el engrane de arriba),
+            donde además se puede probar.</div>
+          <div class="fila"><label>Llave de Claude</label>
             <div style="display:flex;gap:6px;align-items:center">
-              <button class="gh" id="bLlaveGuardar" style="padding:4px 10px">Guardar</button>
-              <button class="gh" id="bLlaveQuitar" style="padding:4px 10px">Quitar</button>
+              <button class="gh" id="bIrAjustes" style="padding:4px 10px">Abrir Ajustes…</button>
               <span id="llaveEstado" style="font-size:11.5px;color:var(--txt3)"></span>
             </div></div>
         </div>

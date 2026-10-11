@@ -8,6 +8,8 @@ const http = require("http");
 
 let ventana = null;
 let backend = null;
+// #106 — true mientras se revisa la licencia: ver `window-all-closed`.
+let enLaPuerta = false;
 let PUERTO = 8760;
 let cerrarConfirmado = false;      // #015
 let archivoPendiente = null;       // #016: ruta con la que arrancó la app
@@ -458,6 +460,23 @@ ipcMain.handle("instalar", (_e, archivo) => {
   } catch { return false; }
 });
 
+/* #105 — la licencia, para la ventana.
+ *
+ * `licencia-resumen` sólo lee lo que ya está guardado: no llama a la suite ni
+ * reescribe nada, así que se puede pedir cada vez que se abre Ajustes sin
+ * gastar red ni arriesgar la licencia del taller (que es justo lo que #100
+ * aprendió a cuidar).
+ *
+ * `licencia-menu` NO cambia de cuenta: abre el diálogo nativo, que pregunta
+ * dos veces. El botón de la página no debe poder cerrar el programa de un
+ * clic. */
+ipcMain.handle("licencia-resumen", () => {
+  try { return licencia.resumen(); } catch { return null; }
+});
+ipcMain.handle("licencia-menu", () => {
+  try { return licencia.abrirMenu(); } catch { return false; }
+});
+
 ipcMain.handle("abrir-enlace", (_e, url) => {
   try {
     const u = new URL(String(url));
@@ -504,7 +523,17 @@ ipcMain.on("resolver-cierre", (_e, puedeCerrar) => {
    en blanco aunque el backend responda. Se exime el loopback antes de crear
    cualquier sesión. */
 app.commandLine.appendSwitch("proxy-bypass-list", "<-loopback>");
-app.commandLine.appendSwitch("no-proxy-server");
+/* #106 — Se quitó `no-proxy-server`.
+ *
+ * Apagaba el proxy para TODO, y lo que hace falta es eximir el loopback. La
+ * ventana de activación de licencia sí sale a internet: en una computadora de
+ * empresa que sale por proxy o VPN, con el proxy apagado no llegaba a la
+ * suite, la pantalla no cargaba y nest101 se cerraba sin decir nada. Es lo que
+ * le pasó a Mike con la 0.19.2.
+ *
+ * El loopback sigue a salvo por dos lados: la lista de excepciones de arriba y
+ * `setProxy({ mode: "direct" })` sobre la sesión que sirve la interfaz, que es
+ * la que iba en blanco con una VPN sin excepción. */
 
 const soloUna = app.requestSingleInstanceLock();
 if (!soloUna) {
@@ -542,14 +571,26 @@ if (!soloUna) {
      * licencia, arrancar Python sería trabajo tirado, y la pantalla de la
      * suite se ve mejor sin el splash encima. */
     cerrarSplash();
-    const paso = await licencia.asegurar({ version: app.getVersion(), avisar: registrar });
+    /* #106 — Mientras la puerta está abierta, cerrar la última ventana NO
+     * cierra el programa. El splash se acaba de cerrar y la de activación
+     * todavía no existe: en ese hueco, `window-all-closed` llegaba a matar el
+     * arranque antes de que nadie viera nada. */
+    enLaPuerta = true;
+    let paso;
+    try {
+      paso = await licencia.asegurar({ version: app.getVersion(), avisar: registrar });
+    } catch (e) {
+      registrar("la puerta de licencia reventó: " + (e?.stack || e));
+      paso = { ok: false, motivo: "ventana", detalle: String(e?.message || e) };
+    }
+    enLaPuerta = false;
     if (!paso.ok) {
-      if (paso.motivo === "sin_red") {
-        const { dialog } = require("electron");
-        dialog.showErrorBox("nest101",
-          "La licencia de este equipo ya venció y no hubo forma de llegar a la suite para renovarla.\n\n" +
-          "Conéctate a internet y vuelve a abrir nest101.");
-      }
+      // Siempre se dice por qué. Antes sólo hablaba el caso «sin_red» y todos
+      // los demás salían callados, que es como no poder ni reportar la falla.
+      const d = licencia.noAbrio(paso.motivo, paso.detalle);
+      registrar(`no se pasó la puerta: ${paso.motivo}${paso.detalle ? " · " + paso.detalle : ""}`);
+      const { dialog } = require("electron");
+      dialog.showErrorBox(d.titulo, d.detalle);
       app.quit();
       return;
     }
@@ -574,6 +615,32 @@ if (!soloUna) {
   });
 }
 
-app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("window-all-closed", () => {
+  // #106 — Durante la puerta de licencia manda la puerta, que sí dice por
+  // qué cierra. Sin esto, el hueco entre cerrar el splash y abrir la
+  // ventana de activación mataba el arranque en silencio.
+  if (enLaPuerta) return;
+  if (process.platform !== "darwin") app.quit();
+});
+/* #106 — Nada se muere callado.
+ *
+ * Una excepción sin atrapar en el proceso principal cerraba el programa sin
+ * dejar rastro: ni en la pantalla ni en `arranque.log`. Ahora queda apuntada y
+ * se enseña, que es lo que vuelve reportable una falla. */
+for (const [evento, como] of [["uncaughtException", "excepción"],
+                              ["unhandledRejection", "promesa rota"]]) {
+  process.on(evento, (e) => {
+    const d = e?.stack || String(e);
+    try { registrar(`${como} sin atrapar: ${d}`); } catch { /* ni eso */ }
+    try {
+      require("electron").dialog.showErrorBox(
+        "nest101 tuvo una falla",
+        `${d}\n\nQueda apuntado en arranque.log, dentro de la carpeta de datos `
+        + "de nest101 (%APPDATA%).");
+    } catch { /* sin ventana todavía */ }
+    app.exit(1);
+  });
+}
+
 app.on("before-quit", () => { try { backend?.kill(); } catch {} });
 process.on("exit", () => { try { backend?.kill(); } catch {} });

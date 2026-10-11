@@ -158,5 +158,34 @@ console.log('\n· lo que enseña el menú Licencia');
   rev(!/token|t\b'/.test(todo.replace(/nest101/g, '')), 'y el token no se enseña en ninguna parte');
 }
 
+/* #106 — Por qué no abrió, dicho con palabras.
+ *
+ * La 0.19.2 se cerraba callada cuando la pantalla de activación no cargaba:
+ * ni diálogo ni renglón en el registro. Lo que se mide aquí es que cada
+ * manera de no pasar tenga frase propia, que no se queden en genérico y que
+ * todas manden al registro, que es de donde se saca el motivo real. */
+console.log('\n· por qué no abrió (#106)');
+{
+  const dichos = new Set();
+  for (const [motivo, pista] of [
+      ['cancelado', /vuelve a abrir/i],
+      ['sin_red', /proxy|VPN/i],
+      ['vencida', /venció/i],
+      ['ventana', /falla del programa/i]]) {
+    const d = n.noAbrio(motivo, '', 'nest101');
+    rev(pista.test(`${d.titulo} ${d.detalle}`), `«${motivo}» se explica con lo suyo`, d.titulo);
+    rev(/arranque\.log/.test(d.detalle), `«${motivo}» manda al registro`);
+    dichos.add(d.titulo);
+  }
+  rev(dichos.size === 4, 'las cuatro dicen cosas distintas, no una frase para todo');
+
+  const raro = n.noAbrio('algo_que_no_existe', '', 'nest101');
+  rev(/no se sabe/.test(raro.detalle), 'un motivo nuevo no se queda mudo', raro.titulo);
+
+  const conDetalle = n.noAbrio('sin_red', 'ERR_CONNECTION_REFUSED (-102)', 'nest101');
+  rev(conDetalle.detalle.includes('ERR_CONNECTION_REFUSED'),
+      'el código crudo viaja para poder reportarlo');
+}
+
 console.log(`\n${fallas ? `${fallas} FALLA${fallas > 1 ? 'S' : ''}` : 'todo bien'} · ${revisadas - fallas} de ${revisadas} pasaron\n`);
 process.exit(fallas ? 1 : 0);
