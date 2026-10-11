@@ -86,6 +86,11 @@ function unIntento({ direccion, avisar, guardarSesion, quedarse }) {
     const ahora = () => new Date().toISOString().slice(11, 23);
 
     let v;
+    // #109 — El renglón va ANTES de crear la ventana: en la máquina de Mike el
+    // programa se murió entero justo aquí, al abrir la segunda, y el registro
+    // acababa sin decir dónde. Ahora, si vuelve a pasar, el último renglón
+    // señala el punto exacto.
+    avisar(`${ahora()} creando la ventana${guardarSesion ? "" : " (sesión limpia)"}`);
     try {
       v = new BrowserWindow({
         width: 480, height: 700, resizable: false, minimizable: false, maximizable: false,

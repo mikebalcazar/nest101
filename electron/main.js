@@ -522,6 +522,22 @@ ipcMain.on("resolver-cierre", (_e, puedeCerrar) => {
    proxy del sistema, y un proxy o VPN sin excepción para loopback deja la ventana
    en blanco aunque el backend responda. Se exime el loopback antes de crear
    cualquier sesión. */
+/* #109 — Que una librería ajena no pueda tumbar la ventana.
+ *
+ * En la máquina de Mike (de dominio, con protección de empresa) la ventana de
+ * activación se muere a los 50 ms de empezar a cargar, sin que nadie del
+ * programa la cierre, y la ventana del arranque —que es local— sí se ve. Esa
+ * diferencia tiene un sospechoso con nombre: cuando un antivirus inyecta su
+ * librería dentro de una ventana tipo Chrome, Chromium mata la ventana entera
+ * si esa librería no está firmada como él quiere. Se llama RendererCodeIntegrity
+ * y Microsoft documenta justo este interruptor para los programas Electron que
+ * conviven con esas protecciones.
+ *
+ * Apagarlo no abre ningún agujero nuevo aquí: lo que carga esta app es su
+ * propia interfaz local y la pantalla de la suite, las dos sin integración con
+ * Node. Y en una máquina donde el problema no existe, no cambia nada.
+ */
+app.commandLine.appendSwitch("disable-features", "RendererCodeIntegrity");
 app.commandLine.appendSwitch("proxy-bypass-list", "<-loopback>");
 /* #106 — Se quitó `no-proxy-server`.
  *
@@ -641,6 +657,23 @@ for (const [evento, como] of [["uncaughtException", "excepción"],
     app.exit(1);
   });
 }
+
+/* #109 — Cualquier proceso que se caiga deja su nombre y su motivo.
+ *
+ * El escucha de #108 estaba pegado a la ventana de la licencia, y lo que pasó
+ * en la máquina de Mike no lo cazó: el contenido se destruyó sin avisar de una
+ * caída. Esto escucha a TODO el programa —ventanas, GPU, red, utilidades—, que
+ * es donde sí aparece un proceso al que mataron desde fuera.
+ *
+ * `reason` dice «crashed», «killed», «oom», «launch-failed» o
+ * «integrity-failure»; ese último es exactamente el de la librería ajena. */
+app.on("child-process-gone", (_e, d) => {
+  registrar(`se fue un proceso hijo: ${d.type}${d.name ? ` (${d.name})` : ""}`
+          + ` · motivo ${d.reason} · salida ${d.exitCode}`);
+});
+app.on("render-process-gone", (_e, _wc, d) => {
+  registrar(`se fue el proceso de una ventana: motivo ${d.reason} · salida ${d.exitCode}`);
+});
 
 app.on("before-quit", () => { try { backend?.kill(); } catch {} });
 process.on("exit", () => { try { backend?.kill(); } catch {} });
