@@ -142,6 +142,29 @@ app.whenReady().then(async () => {
         `«${motivo}» se explica y manda al registro: ${d.titulo}`);
   }
 
+  // ---------------------------------------------------------------- 4 · #111
+  //
+  // El hecho en el que se apoya el arreglo de la 0.19.7: `window-all-closed`
+  // se emite DENTRO de `destroy()`, de forma síncrona. Por eso la guardia
+  // tiene que estar puesta ANTES de cerrar el splash, no después. Si Electron
+  // cambiara esto algún día, aquí se sabría.
+  {
+    const { BrowserWindow } = require("electron");
+    // que no quede ninguna ventana de los pasos anteriores: el evento sólo
+    // sale cuando se cierra la ÚLTIMA
+    for (const w of BrowserWindow.getAllWindows()) { try { w.destroy(); } catch { /* ya */ } }
+    await esperar(300);
+    let guardia = false, vistoCon = null;
+    const escucha = () => { vistoCon = guardia; };
+    app.on("window-all-closed", escucha);
+    const s = new BrowserWindow({ show: false });
+    s.destroy();
+    guardia = true;
+    app.removeListener("window-all-closed", escucha);
+    chk(vistoCon === false,
+        "cerrar la última ventana emite «window-all-closed» ahí mismo, antes del siguiente renglón");
+  }
+
   fs.rmSync(tmp, { recursive: true, force: true });
   acabo = true;
   console.log(`\n${FALLAS.length ? FALLAS.length + " FALLAS" : "todo bien"}`);

@@ -965,6 +965,29 @@ for _m in _re105.finditer(r"\$\{nota\(`([^`]+)`\)\}", _menu):
 chk(not _sueltos, f"las notas del menú están traducidas — faltan: {_sueltos}")
 
 
+# ------------------------------------------- #111 la guardia antes del splash
+#
+# El volcado de caída de la máquina de Mike (0.19.6), leído con los símbolos de
+# Electron: `CHECK(!BrowserMainRunner::ExitedMainMessageLoop())` al crear la
+# ventana de activación. El programa ya se estaba cerrando. Por qué: cerrar el
+# splash —la única ventana— emite `window-all-closed` DENTRO de `destroy()`, de
+# forma síncrona, y el escucha llamaba a `app.quit()` porque la guardia
+# `enLaPuerta` se ponía un renglón DESPUÉS. Medido con Electron 33 en
+# pruebas/arranque.mjs. Esto mide el orden en el texto, que es lo que se puede
+# medir sin pantalla: la guardia tiene que ir antes de cerrar el splash.
+print("\n== #111: LA GUARDIA VA ANTES DE CERRAR EL SPLASH ==")
+_main111 = (_Path(__file__).parent / "electron" / "main.js").read_text(encoding="utf-8")
+_puerta111 = _main111.split("La puerta de licencia va ANTES del backend", 1)[1]
+_g = _puerta111.find("enLaPuerta = true;")
+_c = _puerta111.find("cerrarSplash();")
+chk(_g != -1 and _c != -1, "están la guardia y el cierre del splash en la puerta")
+chk(_g < _c, f"la guardia (pos {_g}) va ANTES de cerrar el splash (pos {_c})")
+chk("enLaPuerta || !listo" in _main111,
+    "y el cierre por «sin ventanas» también respeta el arranque entero")
+chk("\napp.disableHardwareAcceleration();" not in _main111,     # la llamada, no el comentario que la cuenta
+    "la gráfica no se apaga a ciegas: no era la causa y el 3D la usa")
+
+
 # El veredicto va AL FINAL y con código de salida.
 #
 # Estaba a la mitad del archivo y sin `sys.exit`: contaba sólo lo que había

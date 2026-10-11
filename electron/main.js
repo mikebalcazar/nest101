@@ -10,6 +10,9 @@ let ventana = null;
 let backend = null;
 // #106 — true mientras se revisa la licencia: ver `window-all-closed`.
 let enLaPuerta = false;
+// #111 — true cuando la ventana principal ya existe: antes, quedarse sin
+// ventanas es parte del arranque, no una orden de cerrar.
+let listo = false;
 let PUERTO = 8760;
 let cerrarConfirmado = false;      // #015
 let archivoPendiente = null;       // #016: ruta con la que arrancó la app
@@ -537,7 +540,9 @@ ipcMain.on("resolver-cierre", (_e, puedeCerrar) => {
  * propia interfaz local y la pantalla de la suite, las dos sin integración con
  * Node. Y en una máquina donde el problema no existe, no cambia nada.
  */
-app.commandLine.appendSwitch("disable-features", "RendererCodeIntegrity");
+// #111 — el interruptor de RendererCodeIntegrity (#109) se quitó por la misma
+// razón: era una conjetura, y el volcado dijo otra cosa. Ninguna librería
+// ajena tumbaba nada.
 /* #110 — Sin aceleración gráfica, y con volcado de caída.
  *
  * Lo que dijo el registro de la 0.19.5 en la máquina de Mike:
@@ -565,7 +570,8 @@ app.commandLine.appendSwitch("disable-features", "RendererCodeIntegrity");
  *     lado. Si vuelve a caerse, queda un archivo en la carpeta de datos que
  *     dice en qué módulo —qué DLL— se cayó. Es el dato que no se puede
  *     adivinar y el que cierra esto. */
-app.disableHardwareAcceleration();
+// #111 — `app.disableHardwareAcceleration()` se quitó: #110 la apagó a ciegas
+// y el volcado demostró que la gráfica no tenía nada que ver. El 3D la usa.
 try {
   crashReporter.start({ productName: "nest101", companyName: "Taller 101",
                         uploadToServer: false, compress: false });
@@ -611,7 +617,7 @@ if (!soloUna) {
       const g = await app.getGPUInfo("basic");
       const d = (g.gpuDevice || []).map((x) =>
         `${x.vendorId}:${x.deviceId}${x.driverVersion ? " " + x.driverVersion : ""}`).join(", ");
-      registrar(`gráfica: ${d || "?"} · aceleración apagada (#110)`);
+      registrar(`gráfica: ${d || "?"}`);
     } catch (e) { registrar("no se pudo leer la gráfica: " + e.message); }
     registrar(`volcados de caída: ${app.getPath("crashDumps")}`);
     PUERTO = await puertoLibre(8760);
@@ -627,12 +633,24 @@ if (!soloUna) {
     /* La puerta de licencia va ANTES del backend: si este equipo no tiene
      * licencia, arrancar Python sería trabajo tirado, y la pantalla de la
      * suite se ve mejor sin el splash encima. */
-    cerrarSplash();
-    /* #106 — Mientras la puerta está abierta, cerrar la última ventana NO
-     * cierra el programa. El splash se acaba de cerrar y la de activación
-     * todavía no existe: en ese hueco, `window-all-closed` llegaba a matar el
-     * arranque antes de que nadie viera nada. */
+    /* #111 — LA GUARDIA VA ANTES DE CERRAR EL SPLASH. Éste era el error.
+     *
+     * `window-all-closed` se emite DENTRO de `destroy()`, de forma síncrona:
+     * medido con Electron 33, el escucha corre antes de que vuelva la llamada.
+     * Con el splash como única ventana, cerrarlo disparaba `window-all-closed`
+     * → `app.quit()`, y la ventana de activación nacía con el programa ya
+     * cerrándose: su contenido se desarmaba a los 20 ms sin que nadie la
+     * tocara, y crear la siguiente reventaba en Chromium con
+     * `CHECK(!BrowserMainRunner::ExitedMainMessageLoop())` — es lo que dice el
+     * volcado de caída de la máquina de Mike, símbolo por símbolo.
+     *
+     * El error nació con la puerta (#100, 0.19.1): antes el splash sólo se
+     * cerraba cuando la ventana principal ya existía, así que nunca había
+     * cero ventanas. #106 puso la guardia… un renglón DESPUÉS de cerrar el
+     * splash, y por eso no sirvió. Va antes, y además `listo` abajo protege
+     * todo el arranque, no sólo la puerta. */
     enLaPuerta = true;
+    cerrarSplash();
     let paso;
     try {
       paso = await licencia.asegurar({ version: app.getVersion(), avisar: registrar });
@@ -668,6 +686,7 @@ if (!soloUna) {
     }
     menu();
     crearVentana();
+    listo = true;                     // #111 — de aquí en adelante sí se cierra con la última ventana
     app.on("activate", () => { if (!BrowserWindow.getAllWindows().length) crearVentana(); });
   });
 }
@@ -676,7 +695,9 @@ app.on("window-all-closed", () => {
   // #106 — Durante la puerta de licencia manda la puerta, que sí dice por
   // qué cierra. Sin esto, el hueco entre cerrar el splash y abrir la
   // ventana de activación mataba el arranque en silencio.
-  if (enLaPuerta) return;
+  // #111 — y mientras arranca tampoco: cerrar el splash deja cero ventanas
+  // durante un instante, y ese instante disparaba este cierre.
+  if (enLaPuerta || !listo) return;
   if (process.platform !== "darwin") app.quit();
 });
 /* #106 — Nada se muere callado.
