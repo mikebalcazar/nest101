@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, crashReporter } = require("electron");
 const licencia = require("./licencia");
 const { spawn } = require("child_process");
 const path = require("path");
@@ -538,6 +538,39 @@ ipcMain.on("resolver-cierre", (_e, puedeCerrar) => {
  * Node. Y en una máquina donde el problema no existe, no cambia nada.
  */
 app.commandLine.appendSwitch("disable-features", "RendererCodeIntegrity");
+/* #110 — Sin aceleración gráfica, y con volcado de caída.
+ *
+ * Lo que dijo el registro de la 0.19.5 en la máquina de Mike:
+ *
+ *     22:56:31.091  empieza a cargar
+ *     22:56:31.113  el contenido de la ventana se destruyó   ← 22 ms
+ *     22:56:31.129  creando la ventana (sesión limpia)       ← y aquí muere todo
+ *
+ * Y NINGÚN proceso se cayó: ni ventana, ni gráfica, ni red, ni utilidades
+ * —los detectores de #108 y #109 estaban puestos y no vieron nada—. Así que
+ * no es una librería ajena matando procesos (eso lo descarta) ni la sesión
+ * guardada (el segundo intento iba limpio). Lo que queda: el contenido de una
+ * ventana CON MARCO se desarma sin que nadie lo cierre, y crear la siguiente
+ * tumba a Electron a nivel nativo, por debajo de cualquier atrapador de
+ * errores. La de arranque, transparente y sin marco, sobrevive: usa otro
+ * camino de composición. Esa diferencia señala a la gráfica —driver de
+ * video— que es por donde Electron pinta las ventanas con marco.
+ *
+ * Dos cosas, las dos antes de que arranque nada:
+ *
+ *  1. Se apaga la aceleración gráfica. Chromium pinta por software; el 3D
+ *     (WebGL) sigue funcionando, más lento. Si con esto abre, era eso, y se
+ *     afina después (prender la gráfica sólo donde no tumba).
+ *  2. Se enciende el volcado de caída, en disco y sin mandar nada a ningún
+ *     lado. Si vuelve a caerse, queda un archivo en la carpeta de datos que
+ *     dice en qué módulo —qué DLL— se cayó. Es el dato que no se puede
+ *     adivinar y el que cierra esto. */
+app.disableHardwareAcceleration();
+try {
+  crashReporter.start({ productName: "nest101", companyName: "Taller 101",
+                        uploadToServer: false, compress: false });
+} catch (e) { console.error("no se pudo encender el volcado de caída:", e.message); }
+
 app.commandLine.appendSwitch("proxy-bypass-list", "<-loopback>");
 /* #106 — Se quitó `no-proxy-server`.
  *
@@ -573,6 +606,14 @@ if (!soloUna) {
     crearSplash();                                   // #020: nunca una espera muda
     registrar(`nest101 ${app.getVersion()} · ${process.platform} ${process.arch}`);
     registrar(`recursos: ${process.resourcesPath}`);
+    // #110 — qué gráfica hay y dónde quedan los volcados, para leerlos de fuera
+    try {
+      const g = await app.getGPUInfo("basic");
+      const d = (g.gpuDevice || []).map((x) =>
+        `${x.vendorId}:${x.deviceId}${x.driverVersion ? " " + x.driverVersion : ""}`).join(", ");
+      registrar(`gráfica: ${d || "?"} · aceleración apagada (#110)`);
+    } catch (e) { registrar("no se pudo leer la gráfica: " + e.message); }
+    registrar(`volcados de caída: ${app.getPath("crashDumps")}`);
     PUERTO = await puertoLibre(8760);
     registrar(`puerto ${PUERTO}`);
 
