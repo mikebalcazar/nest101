@@ -916,6 +916,26 @@ try:
     _b = _cli105.post("/api/calcular", json=_mueble).json()["piezas"]
     chk([(p["largo"], p["ancho"]) for p in _a] == [(p["largo"], p["ancho"]) for p in _b],
         "en pulgadas sale el MISMO corte: la máquina sigue en milímetros")
+
+    # --- #112 la interfaz no se queda vieja en la caché ---------------------
+    # Mike, 11-oct, con la 0.19.7 instalada: el engrane abría el menú de
+    # septiembre. Era el `app.js` guardado en la caché de Electron, que sin
+    # `Cache-Control` se daba por fresco. Se pide como lo pide Chromium.
+    print("\n== #112: LA INTERFAZ SE VUELVE A PEDIR EN CADA ARRANQUE ==")
+    for _ruta in ("/index.html", "/app.js", "/styles.css"):
+        _r = _cli105.get(_ruta)
+        chk(_r.status_code == 200 and _r.headers.get("cache-control") == "no-cache",
+            f"{_ruta} viaja con «pregunta antes de usar»: {_r.headers.get('cache-control')}")
+    _r = _cli105.get("/app.js")
+    _et = _r.headers.get("etag")
+    chk(bool(_et), f"y con ETag para que preguntar salga barato: {_et}")
+    _r2 = _cli105.get("/app.js", headers={"If-None-Match": _et})
+    chk(_r2.status_code == 304, f"preguntar con el ETag bueno es un 304, no bajar todo: {_r2.status_code}")
+    _main112 = (_Path(__file__).parent / "electron" / "main.js").read_text(encoding="utf-8")
+    _v = _main112.find("session.defaultSession.clearCache()")
+    _w = _main112.find("\n    crearVentana();")
+    chk(_v != -1 and _w != -1 and _v < _w,
+        "y el programa vacía la caché vieja ANTES de abrir la ventana (para lo ya guardado sin cabecera)")
 finally:
     for _k, _v in zip(("T101_PERFIL_DIR", "ANTHROPIC_API_KEY"), _antes105):
         if _v is None:

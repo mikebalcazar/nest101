@@ -1133,8 +1133,31 @@ def diagnostico():
             "python": sys.version, "ejecutable": sys.executable}
 
 
+class _UISinCacheVieja(StaticFiles):
+    """#112 — La interfaz se vuelve a pedir en cada arranque.
+
+    Mike, 11-oct-2026, con la 0.19.7 recién instalada: «Solo me sale esto en el
+    engrane de configuración», y la foto era el menú de SEPTIEMBRE. El
+    instalador sí traía el nuevo. Lo que pasaba: `StaticFiles` no manda
+    `Cache-Control`, y sin él Chromium —el de Electron— calcula la frescura
+    por su cuenta a partir de `Last-Modified`: un archivo que llevaba un mes
+    sin cambiar se da por bueno varios días SIN volver a preguntar. En su
+    `%APPDATA%\\nest101\\Cache` estaba el `app.js` del 16 de septiembre, y
+    eso era lo que pintaba, con el programa ya actualizado tres veces.
+
+    `no-cache` NO es «no guardes»: es «pregunta antes de usar». `StaticFiles`
+    contesta con `ETag`, así que la pregunta cuesta un 304 por archivo contra
+    el propio equipo; nada que se note. Vale también para quien abra la
+    interfaz en un navegador de verdad.
+    """
+    async def get_response(self, path, scope):
+        r = await super().get_response(path, scope)
+        r.headers["Cache-Control"] = "no-cache"
+        return r
+
+
 if UI:
-    app.mount("/", StaticFiles(directory=UI, html=True), name="ui")
+    app.mount("/", _UISinCacheVieja(directory=UI, html=True), name="ui")
 else:
     # Sin interfaz no hay app: se avisa en pantalla en vez de devolver un 404 mudo.
     from fastapi.responses import HTMLResponse

@@ -1,0 +1,1 @@
+La interfaz ya no se queda vieja: tras actualizar, el engrane enseña el menú de Ajustes de la versión instalada, no el de la anterior (#112).

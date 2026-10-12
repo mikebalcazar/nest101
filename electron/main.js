@@ -684,6 +684,21 @@ if (!soloUna) {
       app.quit();
       return;
     }
+    /* #112 — La caché de la interfaz se vacía ANTES de abrir la ventana.
+     *
+     * Mike, 11-oct-2026, con la 0.19.7 recién instalada y el menú de
+     * septiembre en pantalla. El servidor ya manda `no-cache` (server.py),
+     * pero eso sólo gobierna lo que se guarde DE AQUÍ EN ADELANTE: lo que ya
+     * está en `%APPDATA%\nest101\Cache` se guardó sin esa cabecera y Chromium
+     * lo seguiría dando por fresco. Vaciar cuesta nada —todo viene del propio
+     * equipo— y es lo que garantiza que una versión nueva enseñe su interfaz
+     * nueva. Si fallara, se sigue: una caché vieja es menos grave que no
+     * abrir. */
+    try {
+      const { session } = require("electron");
+      await session.defaultSession.clearCache();
+      registrar("caché de la interfaz vaciada");
+    } catch (e) { registrar("no se pudo vaciar la caché de la interfaz: " + e.message); }
     menu();
     crearVentana();
     listo = true;                     // #111 — de aquí en adelante sí se cierra con la última ventana
